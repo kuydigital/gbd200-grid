@@ -1,0 +1,10 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Saved copies of the connected watch's original settings (personal data)
+orig_*.bin
+
+# OS
+.DS_Store
