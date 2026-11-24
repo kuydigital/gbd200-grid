@@ -115,6 +115,10 @@ reset a setting by hand.
 Issues and PRs welcome — especially confirmations on other G-Shock models, the world-city index
 map, and the fitness-profile layout. Keep writes reversible and read-back-verified.
 
+## Support
+
+If this saved you some tinkering time, you can [**☕ buy me a coffee**](https://www.paypal.com/paypalme/thekuys).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

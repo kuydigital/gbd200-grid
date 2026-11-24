@@ -160,6 +160,11 @@
     overflow-y: auto; letter-spacing: 0.04em; border-top: 1px solid var(--edge); margin-top: 14px; padding-top: 10px; }
   .log b { color: var(--blue); } .log .o { color: var(--amber); } .log .e { color: var(--red); } .log .g { color: var(--green); }
   .note { font-family: "Share Tech Mono", monospace; font-size: 12px; color: var(--muted); line-height: 1.7; letter-spacing: 0.02em; }
+  .coffee { margin-top: 14px; text-align: center; }
+  .coffee a { display: inline-block; font-family: "Chakra Petch", sans-serif; font-weight: 600; font-size: 13px;
+    letter-spacing: 0.04em; text-decoration: none; color: #1a1205; background: var(--amber);
+    padding: 9px 18px; border-radius: 7px; border: 1px solid #c8872a; transition: filter 0.15s ease; }
+  .coffee a:hover { filter: brightness(1.08); }
   .note b { color: var(--amber); } a { color: var(--blue); }
   @media (prefers-reduced-motion: reduce) { .chip .dot { animation: none !important; } }
 </style>
@@ -326,9 +331,13 @@
 
   <p class="note">
     <b>What this is:</b> the GBD&#8209;200's own LCD is fixed in ROM and can't be reskinned. This is a <b>companion console</b>
-    that reads and writes the watch's real settings over Web Bluetooth (Chrome / Edge). World-time and fitness-profile writes
-    are documented but held for a future release pending hardware verification.
+    that reads and writes the watch's real settings over Web Bluetooth (Chrome / Edge) &mdash; time, alarms, timers,
+    settings, notifications and world time, all verified on hardware.
     Not affiliated with or endorsed by Casio. Protocol derived from the open-source Gadgetbridge project.
+  </p>
+
+  <p class="coffee">
+    <a href="https://www.paypal.com/paypalme/thekuys" target="_blank" rel="noopener noreferrer">&#9749; Buy me a coffee</a>
   </p>
 </div>
 
