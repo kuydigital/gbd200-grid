@@ -237,8 +237,10 @@
         <div class="toggle"><span class="lab">Button Tone<small>operation beep</small></span><button class="sw" id="swTone" aria-pressed="false" aria-label="button tone" disabled></button></div>
         <div class="toggle"><span class="lab">Auto Light<small>tilt to illuminate</small></span><button class="sw" id="swLight" aria-pressed="false" aria-label="auto light" disabled></button></div>
         <div class="toggle"><span class="lab">Key Vibration<small>haptic feedback</small></span><button class="sw" id="swVib" aria-pressed="false" aria-label="key vibration" disabled></button></div>
+        <div class="toggle"><span class="lab">Keep Auto Light On<small>re-enable while connected (beats the 6h auto-off)</small></span><button class="sw" id="swKeepLight" aria-pressed="false" aria-label="keep auto light on"></button></div>
       </div>
       <p class="note" style="margin-top:12px">Each toggle reads the watch's current 0x13 block, flips one bit, and writes it back &#8212; all other settings preserved.</p>
+      <p class="note"><b>Keep Auto Light On</b> is a companion-side workaround: the GBD&#8209;200's firmware turns Auto Light off by itself after about 6 hours and there's no setting to stop that. While this page stays <b>connected</b>, it re-enables Auto Light whenever the watch lets it lapse. It only works while connected (so the phone's G&#8209;SHOCK MOVE app can't be connected at the same time), and defeating the timeout uses more battery.</p>
     </div>
   </section>
 
@@ -385,10 +387,16 @@
     timers: [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"",min:0,sec:0},{name:"",min:0,sec:0} ],
     cities: ["—", "—"],
     profile: { female:false, right:false },
-    activity: { date:"—", steps:"—", cals:"—" }
+    activity: { date:"—", steps:"—", cals:"—" },
+    keepLight: false
   };
   var bt = { device:null, server:null, req:null, all:null, note:null, c23:null, c24:null, pending:null };
   var convoyBuf = [];
+  // Keep Auto Light On: the GBD-200 firmware auto-disables Auto Light after ~6h.
+  // We can't switch off that timer (no protocol field for it), so we poll the 0x13
+  // block and re-enable Auto Light whenever it has lapsed — only while connected.
+  var KEEP_LIGHT_MS = 5 * 60 * 1000;   // re-check every 5 minutes
+  var keepLightTimer = null;
   var noteId = 1;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -509,6 +517,7 @@
     $("swTone").setAttribute("aria-pressed", state.basic.tone ? "true" : "false");
     $("swLight").setAttribute("aria-pressed", state.basic.light ? "true" : "false");
     $("swVib").setAttribute("aria-pressed", state.basic.vib ? "true" : "false");
+    $("swKeepLight").setAttribute("aria-pressed", state.keepLight ? "true" : "false");
   }
   function renderTimers() {
     var dis = state.mode !== "live" ? " disabled" : "", t = $("timers"); t.innerHTML = "";
@@ -557,7 +566,7 @@
     try {
       log("Requesting device…");
       bt.device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "CASIO" }], optionalServices: [SVC] });
-      bt.device.addEventListener("gattserverdisconnected", function () { if (state.mode === "live") { log("Link dropped.", "e"); setMode("offline"); } });
+      bt.device.addEventListener("gattserverdisconnected", function () { if (state.mode === "live") { stopKeepLight(); log("Link dropped.", "e"); setMode("offline"); } });
       log("Connecting to <b>" + (bt.device.name || "device") + "</b>…");
       bt.server = await bt.device.gatt.connect();
       var svc = await bt.server.getPrimaryService(SVC);
@@ -575,12 +584,14 @@
       } catch (e) { bt.c23 = bt.c24 = null; }
       setMode("live"); log("Link established.", "g");
       await refresh();
+      if (state.keepLight) { if (!state.basic.light) { try { await writeBasic("light", true); } catch (e) {} } startKeepLight(); log("Keep Auto Light On is active.", "g"); }
     } catch (e) {
       log("Connect failed: " + (e && e.message ? e.message : e), "e");
       setMode(hasBluetooth() ? "offline" : "demo");
     }
   }
   function disconnect() {
+    stopKeepLight();
     try { if (bt.device && bt.device.gatt && bt.device.gatt.connected) bt.device.gatt.disconnect(); } catch (e) {}
     bt.device = bt.server = bt.req = bt.all = bt.note = bt.c23 = bt.c24 = null;
     setMode("offline"); log("Disconnected.");
@@ -638,6 +649,31 @@
       await writeAll(arr); await delay(150); parseBasic(await request([0x13]));
       renderAll(); log("Setting: " + which + " &#8594; " + (on ? '<span class="g">ON</span>' : "OFF"));
     } catch (e) { state.basic = prev; renderAll(); log("Setting write failed (reverted): " + e.message, "e"); }
+  }
+
+  // ---- keep auto light on (companion-side, defeats the firmware 6h auto-off) ----
+  function stopKeepLight() { if (keepLightTimer) { clearInterval(keepLightTimer); keepLightTimer = null; } }
+  function startKeepLight() {
+    stopKeepLight();
+    keepLightTimer = setInterval(async function () {
+      if (state.mode !== "live" || !state.keepLight) { stopKeepLight(); return; }
+      try {
+        var bs = await request([0x13]);
+        if (bs) { parseBasic(bs); if (!state.basic.light) { log("Auto Light had lapsed &#8212; re-enabling.", "o"); await writeBasic("light", true); } }
+      } catch (e) {}
+    }, KEEP_LIGHT_MS);
+  }
+  async function setKeepLight(on) {
+    state.keepLight = on; renderDisplay();
+    if (on) {
+      if (state.mode === "live") {
+        log("Keep Auto Light On: enabled &#8212; will re-enable if the watch's 6h timer turns it off.", "g");
+        if (!state.basic.light) { try { await writeBasic("light", true); } catch (e) {} }
+        startKeepLight();
+      } else {
+        log("Keep Auto Light On: armed &#8212; takes effect once you Connect.", "o");
+      }
+    } else { stopKeepLight(); log("Keep Auto Light On: disabled."); }
   }
 
   var NAME_RE = /[^A-Z0-9/+\-_!?&]/g;
@@ -795,6 +831,7 @@
   $("swTone").addEventListener("click", function () { writeBasic("tone", !state.basic.tone); });
   $("swLight").addEventListener("click", function () { writeBasic("light", !state.basic.light); });
   $("swVib").addEventListener("click", function () { writeBasic("vib", !state.basic.vib); });
+  $("swKeepLight").addEventListener("click", function () { setKeepLight(!state.keepLight); });
   $("sendTimers").addEventListener("click", sendTimers);
   $("sendNote").addEventListener("click", function () { sendNotification(false); });
   $("clearNote").addEventListener("click", function () { sendNotification(true); });
