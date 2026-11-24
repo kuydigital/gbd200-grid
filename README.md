@@ -25,6 +25,7 @@ Not affiliated with or endorsed by Casio. The BLE protocol was derived from the 
 | **Activity** | Read today's step & calorie totals | `0x23` / `0x24` |
 | **Phone Finder** | Buzz the watch; hear it when the watch pings your phone | `0x30` / `0x0a` |
 | **World Time** | Set home & world cities from a 30-city table | `0x21`/`0x1d`/`0x1e`/`0x1f` |
+| **Status** | Link health, module, firmware, home city, live watch-condition block | `0x28` `0x26` `0x20` `0x23` |
 | **Readout** | Module name, firmware, home city, status block | `0x23` `0x20` `0x1f` `0x28` |
 
 World-time editing was reverse-engineered from a PacketLogger capture of the official app: the watch
@@ -40,6 +41,10 @@ a `0x2f` config, `0x21` close). Verified live for Wellington, Tokyo and Las Vega
   raw steps. So only **wrist and gender** (the flags that *are* sent, in `0x45`) are editable.
 - **Live GPS running** — the RUNNING workout upload streams phone GPS in a proprietary format that isn't
   reverse-engineered; not feasible from a Web Bluetooth tool.
+- **Battery percentage** — the GBD-200 does not broadcast a battery level over BLE. Neither dakk's protocol
+  reverse-engineering nor Gadgetbridge reads a battery field for this watch family, and the watch-condition
+  frame (`0x28`) carries none. The battery indicator exists only on the watch itself. The **Status** tab shows
+  the real watch-condition block and link health instead.
 
 ## Use it — web app (no install)
 

@@ -168,6 +168,8 @@
     letter-spacing: 0.04em; text-decoration: none; color: #1a1205; background: var(--amber);
     padding: 9px 18px; border-radius: 7px; border: 1px solid #c8872a; transition: filter 0.15s ease; }
   .coffee a:hover { filter: brightness(1.08); }
+  .copyright { margin-top: 12px; text-align: center; font-family: "Share Tech Mono", monospace;
+    font-size: 11px; letter-spacing: 0.08em; color: var(--muted); }
   .note b { color: var(--amber); } a { color: var(--blue); }
   @media (prefers-reduced-motion: reduce) { .chip .dot { animation: none !important; } }
 </style>
@@ -191,6 +193,7 @@
     <button class="tab" role="tab" data-sec="finder" aria-selected="false">Finder</button>
     <button class="tab" role="tab" data-sec="activity" aria-selected="false">Activity</button>
     <button class="tab" role="tab" data-sec="profile" aria-selected="false">Profile</button>
+    <button class="tab" role="tab" data-sec="status" aria-selected="false">Status</button>
     <button class="tab" role="tab" data-sec="display" aria-selected="false">Set</button>
   </div>
 
@@ -207,7 +210,7 @@
         <div class="tile"><div class="k">Module</div><div class="v small" id="tName">&#8212;</div></div>
         <div class="tile"><div class="k">Firmware</div><div class="v small" id="tFw">&#8212;</div></div>
         <div class="tile"><div class="k">Home City</div><div class="v" id="tCity">&#8212;</div></div>
-        <div class="tile"><div class="k">Status Block</div><div class="v small" id="tStatus">&#8212;</div><div class="power"><i id="pwr"></i></div></div>
+        <div class="tile"><div class="k">Status Block</div><div class="v small" id="tStatus">&#8212;</div></div>
       </div>
       <div class="actions">
         <button id="syncBtn" class="primary" disabled>Sync Watch Time</button>
@@ -300,6 +303,22 @@
       <p class="note" style="margin-top:12px"><b>Buzz My Watch</b> pushes an alert so the watch vibrates/beeps. And when you hold the watch's button to <b>find your phone</b>, this page sounds an alarm &#8212; keep it open with sound on.</p>
     </div>
   </section>
+  <section data-sec="status" hidden>
+    <div class="panel">
+      <p class="eyebrow">Status &#183; Health</p>
+      <div class="tiles">
+        <div class="tile"><div class="k">Link</div><div class="v small" id="sLink">&#8212;</div></div>
+        <div class="tile"><div class="k">Module</div><div class="v small" id="sModule">&#8212;</div></div>
+        <div class="tile"><div class="k">Firmware</div><div class="v small" id="sFw">&#8212;</div></div>
+        <div class="tile"><div class="k">Home City</div><div class="v" id="sCity">&#8212;</div></div>
+        <div class="tile"><div class="k">Watch Condition &#183; 0x28</div><div class="v small" id="sCond">&#8212;</div></div>
+        <div class="tile"><div class="k">Last Readout</div><div class="v small" id="sSync">&#8212;</div></div>
+        <div class="tile"><div class="k">Battery</div><div class="v small" id="sBatt">On&#8209;watch only</div></div>
+      </div>
+      <div class="actions"><button id="refreshBtn2" class="primary" disabled>Refresh Status</button></div>
+      <p class="note" style="margin-top:12px"><b>About battery:</b> the GBD&#8209;200 does <b>not</b> broadcast its battery level over Bluetooth. This is confirmed against the full protocol reverse&#8209;engineering and Gadgetbridge &#8212; neither reads a battery field for this watch family, and the watch's condition frame carries none. The only battery reading is the indicator on the watch itself. This tab shows the live <b>watch&#8209;condition block</b> and link health, which the watch <i>does</i> report.</p>
+    </div>
+  </section>
 
   <!-- ACTIVITY -->
   <section data-sec="activity" hidden>
@@ -342,6 +361,8 @@
   <p class="coffee">
     <a href="https://www.paypal.com/paypalme/thekuys" target="_blank" rel="noopener noreferrer">&#9749; Buy me a coffee</a>
   </p>
+
+  <p class="copyright">Copyright &copy; 2026 KUYDIGITAL &middot; MIT License</p>
 </div>
 
 <script>
@@ -357,7 +378,7 @@
 
   // Generic seed shown before a watch is connected (not anyone's real data).
   var state = {
-    mode: "offline", name: "CASIO GBD-200", fw: "—", city: "—", status: "—",
+    mode: "offline", name: "CASIO GBD-200", fw: "—", city: "—", status: "—", lastSync: "—",
     alarms: [ {h:6,m:0,on:false},{h:7,m:0,on:false},{h:8,m:0,on:false},{h:12,m:0,on:false},{h:18,m:0,on:false} ],
     basic: { h24:true, tone:true, light:false, vib:false },
     repeat: 1,
@@ -384,7 +405,7 @@
     while (el.children.length > 50) el.removeChild(el.lastChild);
   }
 
-  var WRITE_IDS = ["syncBtn","refreshBtn","repeat","sendTimers","sendNote","clearNote","nTitle","nMsg","nCat","nAlert","sw24","swTone","swLight","swVib","swWrist","swGender","readAct","findWatch","wSlot","wSelect","applyCity"];
+  var WRITE_IDS = ["syncBtn","refreshBtn","repeat","sendTimers","sendNote","clearNote","nTitle","nMsg","nCat","nAlert","sw24","swTone","swLight","swVib","swWrist","swGender","readAct","findWatch","wSlot","wSelect","applyCity","refreshBtn2"];
 
   // name -> [A, B, offset, dstOffset, dstRules] (from Gadgetbridge CasioTimeZone + capture)
   var CITY_TABLE = {
@@ -423,7 +444,15 @@
   setInterval(tick, 1000); tick();
 
   // ---- render ----
-  function renderAll() { renderInfo(); renderAlarms(); renderDisplay(); renderTimers(); renderProfile(); renderActivity(); renderWorld(); }
+  function renderAll() { renderInfo(); renderAlarms(); renderDisplay(); renderTimers(); renderProfile(); renderActivity(); renderWorld(); renderStatus(); }
+  function renderStatus() {
+    $("sLink").textContent = state.mode === "live" ? "Live Link" : (state.mode === "demo" ? "Preview" : "Offline");
+    $("sModule").textContent = state.name || "—";
+    $("sFw").textContent = state.fw || "—";
+    $("sCity").textContent = state.city || "—";
+    $("sCond").textContent = state.status || "—";
+    $("sSync").textContent = state.lastSync || "—";
+  }
   function renderProfile() {
     $("swWrist").setAttribute("aria-pressed", state.profile.right ? "true" : "false");
     $("swGender").setAttribute("aria-pressed", state.profile.female ? "true" : "false");
@@ -543,7 +572,7 @@
     var nm = await safeRead([0x23]); if (nm) state.name = ascii(nm, 1);
     var fw = await safeRead([0x20]); if (fw) state.fw = fw[1] + "." + fw[2] + "." + fw[3];
     var ct = await safeRead([0x1f]); if (ct) state.city = ascii(ct, 2);
-    var st = await safeRead([0x28]); if (st) { state.status = hexRange(st, 1, 7); if (st.length > 5) $("pwr").style.setProperty("--lvl", clamp(Math.round(st[5] / 255 * 100), 8, 100) + "%"); }
+    var st = await safeRead([0x28]); if (st) { state.status = hexRange(st, 1, 7); }
     var a1 = await safeRead([0x15]); if (a1) state.alarms[0] = parseAlarm15(a1);
     var a2 = await safeRead([0x16]); if (a2) parseAlarm16(a2);
     var bs = await safeRead([0x13]); if (bs) parseBasic(bs);
@@ -551,6 +580,7 @@
     var c1 = await safeRead([0x1f, 1]); if (c1) state.cities[1] = ascii(c1, 2);
     var pf = await safeRead([0x45]); if (pf) parseProfile(pf);
     await refreshTimers();
+    state.lastSync = new Date().toLocaleTimeString();
     renderAll(); log("Readout refreshed.", "g");
   }
   async function refreshTimers() {
@@ -724,6 +754,7 @@
   // ---- wire up ----
   $("connectBtn").addEventListener("click", connect);
   $("refreshBtn").addEventListener("click", refresh);
+  $("refreshBtn2").addEventListener("click", refresh);
   $("syncBtn").addEventListener("click", async function () {
     if (state.mode !== "live") return;
     var d = new Date(), y = d.getFullYear();
