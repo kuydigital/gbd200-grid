@@ -177,9 +177,13 @@
   <div class="tabs" role="tablist" id="tabs">
     <button class="tab" role="tab" data-sec="system" aria-selected="true">Time</button>
     <button class="tab" role="tab" data-sec="alarms" aria-selected="false">Alarm</button>
-    <button class="tab" role="tab" data-sec="display" aria-selected="false">Set</button>
     <button class="tab" role="tab" data-sec="timers" aria-selected="false">Timer</button>
+    <button class="tab" role="tab" data-sec="world" aria-selected="false">World</button>
     <button class="tab" role="tab" data-sec="signal" aria-selected="false">Signal</button>
+    <button class="tab" role="tab" data-sec="finder" aria-selected="false">Finder</button>
+    <button class="tab" role="tab" data-sec="activity" aria-selected="false">Activity</button>
+    <button class="tab" role="tab" data-sec="profile" aria-selected="false">Profile</button>
+    <button class="tab" role="tab" data-sec="display" aria-selected="false">Set</button>
   </div>
 
   <!-- SYSTEM / TIME -->
@@ -260,6 +264,54 @@
     </div>
   </section>
 
+  <!-- WORLD -->
+  <section data-sec="world" hidden>
+    <div class="panel">
+      <p class="eyebrow">World Time &#183; Cities</p>
+      <div class="tiles">
+        <div class="tile"><div class="k">Home (Slot 0)</div><div class="v" id="wCity0">&#8212;</div></div>
+        <div class="tile"><div class="k">World (Slot 1)</div><div class="v" id="wCity1">&#8212;</div></div>
+      </div>
+      <p class="note" style="margin-top:12px"><b>Read-only for now.</b> Changing the city needs the exact timezone-index bytes the GBD-200 expects; pinning those down needs a Bluetooth capture of the official app. Tracked for a future release.</p>
+    </div>
+  </section>
+
+  <!-- FINDER -->
+  <section data-sec="finder" hidden>
+    <div class="panel">
+      <p class="eyebrow">Phone Finder &#183; Two-Way</p>
+      <div class="actions"><button id="findWatch" class="primary" disabled>Buzz My Watch</button></div>
+      <p id="finderAlert" class="note" style="color:var(--red);font-size:15px" hidden>&#128227; THE WATCH IS LOOKING FOR THIS PHONE</p>
+      <p class="note" style="margin-top:12px"><b>Buzz My Watch</b> pushes an alert so the watch vibrates/beeps. And when you hold the watch's button to <b>find your phone</b>, this page sounds an alarm &#8212; keep it open with sound on.</p>
+    </div>
+  </section>
+
+  <!-- ACTIVITY -->
+  <section data-sec="activity" hidden>
+    <div class="panel">
+      <p class="eyebrow">Activity &#183; Today</p>
+      <div class="tiles">
+        <div class="tile"><div class="k">Date (UTC)</div><div class="v small" id="aDate">&#8212;</div></div>
+        <div class="tile"><div class="k">Steps</div><div class="v" id="aSteps">&#8212;</div></div>
+        <div class="tile"><div class="k">Calories</div><div class="v" id="aCals">&#8212;</div></div>
+      </div>
+      <div class="actions"><button id="readAct" class="primary" disabled>Read Activity</button></div>
+      <p class="note">Reads the step/calorie totals the watch logged for today (convoy channel 0x23/0x24). Read-only.</p>
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section data-sec="profile" hidden>
+    <div class="panel">
+      <p class="eyebrow">Profile &#183; 0x45</p>
+      <div class="grid2">
+        <div class="toggle"><span class="lab">Wrist<small>left / right</small></span><button class="sw" id="swWrist" aria-pressed="false" aria-label="wrist right" disabled></button></div>
+        <div class="toggle"><span class="lab">Gender<small>male / female</small></span><button class="sw" id="swGender" aria-pressed="false" aria-label="gender female" disabled></button></div>
+      </div>
+      <p class="note" style="margin-top:10px">Toggle = right wrist / female (the official app's profile bits). Height, weight and birthday are stored too but not yet decoded reliably, so they're left out to avoid writing bad values.</p>
+    </div>
+  </section>
+
   <div class="panel">
     <p class="eyebrow">Console</p>
     <div class="log" id="log"></div>
@@ -281,6 +333,8 @@
   var REQ  = "26eb002c-b012-49a8-b1f8-394fb2032b0f"; // write feature requests
   var ALL  = "26eb002d-b012-49a8-b1f8-394fb2032b0f"; // notify + write settings
   var NOTE = "26eb0030-b012-49a8-b1f8-394fb2032b0f"; // phone notification sink
+  var C23  = "26eb0023-b012-49a8-b1f8-394fb2032b0f"; // convoy request / echo
+  var C24  = "26eb0024-b012-49a8-b1f8-394fb2032b0f"; // convoy payload (inverted)
 
   // Generic seed shown before a watch is connected (not anyone's real data).
   var state = {
@@ -288,9 +342,13 @@
     alarms: [ {h:6,m:0,on:false},{h:7,m:0,on:false},{h:8,m:0,on:false},{h:12,m:0,on:false},{h:18,m:0,on:false} ],
     basic: { h24:true, tone:true, light:false, vib:false },
     repeat: 1,
-    timers: [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"",min:0,sec:0},{name:"",min:0,sec:0} ]
+    timers: [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"",min:0,sec:0},{name:"",min:0,sec:0} ],
+    cities: ["—", "—"],
+    profile: { female:false, right:false },
+    activity: { date:"—", steps:"—", cals:"—" }
   };
-  var bt = { device:null, server:null, req:null, all:null, note:null, pending:null };
+  var bt = { device:null, server:null, req:null, all:null, note:null, c23:null, c24:null, pending:null };
+  var convoyBuf = [];
   var noteId = 1;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -307,7 +365,7 @@
     while (el.children.length > 50) el.removeChild(el.lastChild);
   }
 
-  var WRITE_IDS = ["syncBtn","refreshBtn","repeat","sendTimers","sendNote","clearNote","nTitle","nMsg","nCat","nAlert","sw24","swTone","swLight","swVib"];
+  var WRITE_IDS = ["syncBtn","refreshBtn","repeat","sendTimers","sendNote","clearNote","nTitle","nMsg","nCat","nAlert","sw24","swTone","swLight","swVib","swWrist","swGender","readAct","findWatch"];
   function setMode(m) {
     state.mode = m;
     $("chip").setAttribute("data-mode", m);
@@ -332,7 +390,13 @@
   setInterval(tick, 1000); tick();
 
   // ---- render ----
-  function renderAll() { renderInfo(); renderAlarms(); renderDisplay(); renderTimers(); }
+  function renderAll() { renderInfo(); renderAlarms(); renderDisplay(); renderTimers(); renderProfile(); renderActivity(); renderWorld(); }
+  function renderProfile() {
+    $("swWrist").setAttribute("aria-pressed", state.profile.right ? "true" : "false");
+    $("swGender").setAttribute("aria-pressed", state.profile.female ? "true" : "false");
+  }
+  function renderActivity() { $("aDate").textContent = state.activity.date; $("aSteps").textContent = state.activity.steps; $("aCals").textContent = state.activity.cals; }
+  function renderWorld() { $("wCity0").textContent = state.cities[0] || "—"; $("wCity1").textContent = state.cities[1] || "—"; }
   function renderInfo() {
     $("tName").textContent = state.name || "—";
     $("unit").textContent = (state.name || "GBD-200").replace(/^CASIO\s+/i, "");
@@ -389,7 +453,13 @@
     });
   }
   function writeAll(bytes) { return bt.all.writeValueWithResponse(new Uint8Array(bytes)); }
-  function onNotify(ev) { if (bt.pending) bt.pending(ev.target.value); }
+  function onNotify(ev) {
+    var dv = ev.target.value;
+    if (bt.pending) { bt.pending(dv); return; }
+    // unsolicited frame: watch-initiated find-phone is feature 0x0a with data[1]==0x02
+    try { if (dv.byteLength > 1 && dv.getUint8(0) === 0x0a && dv.getUint8(1) === 0x02) findPhone(); } catch (e) {}
+  }
+  function onConvoy(ev) { var d = new Uint8Array(ev.target.value.buffer.slice(0)); for (var i = 0; i < d.length; i++) convoyBuf.push(d[i]); }
   async function safeRead(bytes) { try { return await request(bytes); } catch (e) { return null; } }
 
   function ascii(a, start) { var s = ""; for (var i = start; i < a.length; i++) { var b = a[i]; if (b === 0) break; if (b >= 32 && b < 127) s += String.fromCharCode(b); } return s.trim(); }
@@ -410,6 +480,13 @@
       try { bt.note = await svc.getCharacteristic(NOTE); } catch (e) { bt.note = null; }
       await bt.all.startNotifications();
       bt.all.addEventListener("characteristicvaluechanged", onNotify);
+      try {
+        bt.c23 = await svc.getCharacteristic(C23);
+        bt.c24 = await svc.getCharacteristic(C24);
+        await bt.c23.startNotifications();
+        await bt.c24.startNotifications();
+        bt.c24.addEventListener("characteristicvaluechanged", onConvoy);
+      } catch (e) { bt.c23 = bt.c24 = null; }
       setMode("live"); log("Link established.", "g");
       await refresh();
     } catch (e) {
@@ -419,7 +496,7 @@
   }
   function disconnect() {
     try { if (bt.device && bt.device.gatt && bt.device.gatt.connected) bt.device.gatt.disconnect(); } catch (e) {}
-    bt.device = bt.server = bt.req = bt.all = bt.note = null;
+    bt.device = bt.server = bt.req = bt.all = bt.note = bt.c23 = bt.c24 = null;
     setMode("offline"); log("Disconnected.");
   }
 
@@ -437,6 +514,9 @@
     var a1 = await safeRead([0x15]); if (a1) state.alarms[0] = parseAlarm15(a1);
     var a2 = await safeRead([0x16]); if (a2) parseAlarm16(a2);
     var bs = await safeRead([0x13]); if (bs) parseBasic(bs);
+    if (ct) state.cities[0] = ascii(ct, 2);
+    var c1 = await safeRead([0x1f, 1]); if (c1) state.cities[1] = ascii(c1, 2);
+    var pf = await safeRead([0x45]); if (pf) parseProfile(pf);
     await refreshTimers();
     renderAll(); log("Readout refreshed.", "g");
   }
@@ -509,6 +589,65 @@
     } catch (e) { log("Notification failed: " + e.message, "e"); }
   }
 
+  // ---- profile (0x45) ----
+  function parseProfile(a) { state.profile = { female: (a[1] & 0x01) !== 0, right: (a[1] & 0x02) !== 0 }; }
+  async function writeProfile(which, on) {
+    if (state.mode !== "live") return;
+    try {
+      var cur = await request([0x45]); var arr = Array.from(cur);
+      if (which === "gender") { if (on) arr[1] |= 0x01; else arr[1] &= ~0x01; }
+      if (which === "wrist")  { if (on) arr[1] |= 0x02; else arr[1] &= ~0x02; }
+      await writeAll(arr); await delay(150); parseProfile(await request([0x45]));
+      renderProfile(); log("Profile: " + which + " &#8594; " + (on ? '<span class="g">ON</span>' : "OFF"));
+    } catch (e) { log("Profile write failed: " + e.message, "e"); renderProfile(); }
+  }
+
+  // ---- activity (convoy 0x23/0x24) ----
+  async function readActivity() {
+    if (state.mode !== "live" || !bt.c23) { log("Activity channel unavailable on this watch.", "e"); return; }
+    convoyBuf = [];
+    try {
+      log("Requesting activity…");
+      await bt.c23.writeValueWithResponse(new Uint8Array([0x00, 0x11, 0x00, 0x00, 0x00]));
+      await delay(3000);
+      if (convoyBuf.length < 13) { log("No activity payload (" + convoyBuf.length + " bytes).", "o"); return; }
+      var raw = convoyBuf.map(function (b) { return (~b) & 0xff; });
+      var steps = (raw[7] | (raw[8] << 8) | (raw[9] << 16) | (raw[10] << 24)) >>> 0;
+      if (steps === 0xfffffffe) steps = 0;
+      var cals = raw[11] | (raw[12] << 8); if (cals === 0xfffe) cals = 0;
+      state.activity = { date: (2000 + raw[2]) + "-" + pad(raw[3]) + "-" + pad(raw[4]), steps: steps, cals: cals };
+      renderActivity(); log("Activity: " + steps + " steps, " + cals + " cal.", "g");
+    } catch (e) { log("Activity read failed: " + e.message, "e"); }
+  }
+
+  // ---- phone finder ----
+  async function findWatch() {
+    if (state.mode !== "live" || !bt.note) { log("Notification channel unavailable.", "e"); return; }
+    var id = noteId++;
+    var arr = [id & 0xff, (id >> 8) & 0xff, (id >> 16) & 0xff, (id >> 24) & 0xff, 0x00, 0x01, 0x00];
+    utf8(ts15()).forEach(function (b) { arr.push(b); });
+    field(arr, []); field(arr, utf8("FIND WATCH").slice(0, 32)); field(arr, []); field(arr, utf8("Where are you?").slice(0, 250));
+    try { await bt.note.writeValueWithoutResponse(new Uint8Array(arr.map(function (b) { return (~b) & 0xff; }))); log("Buzzed the watch.", "g"); }
+    catch (e) { log("Buzz failed: " + e.message, "e"); }
+  }
+  var findAudio = null;
+  function findPhone() {
+    log("Watch is looking for this phone!", "o");
+    var el = $("finderAlert"); if (el) el.hidden = false;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+      findAudio = findAudio || new Ctx();
+      var t = findAudio.currentTime;
+      for (var i = 0; i < 6; i++) {
+        var o = findAudio.createOscillator(), g = findAudio.createGain();
+        o.type = "square"; o.frequency.value = i % 2 ? 880 : 1320;
+        g.gain.value = 0.0001; o.connect(g); g.connect(findAudio.destination);
+        var s = t + i * 0.35; o.start(s); g.gain.setValueAtTime(0.25, s); g.gain.setValueAtTime(0.0001, s + 0.25); o.stop(s + 0.3);
+      }
+    } catch (e) {}
+    setTimeout(function () { if ($("finderAlert")) $("finderAlert").hidden = true; }, 6000);
+  }
+
   // ---- tabs ----
   $("tabs").addEventListener("click", function (ev) {
     var tab = ev.target.closest(".tab"); if (!tab) return;
@@ -539,6 +678,10 @@
   $("sendTimers").addEventListener("click", sendTimers);
   $("sendNote").addEventListener("click", function () { sendNotification(false); });
   $("clearNote").addEventListener("click", function () { sendNotification(true); });
+  $("swWrist").addEventListener("click", function () { writeProfile("wrist", !state.profile.right); });
+  $("swGender").addEventListener("click", function () { writeProfile("gender", !state.profile.female); });
+  $("readAct").addEventListener("click", readActivity);
+  $("findWatch").addEventListener("click", findWatch);
 
   // ---- boot ----
   renderAll();

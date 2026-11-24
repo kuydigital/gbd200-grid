@@ -8,3 +8,9 @@ orig_*.bin
 
 # OS
 .DS_Store
+
+# Exploratory/dev scripts with a hardcoded watch address (not for distribution)
+probe.py
+verify.py
+worldtime_test.py
+profile_test.py

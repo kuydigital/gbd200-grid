@@ -21,11 +21,20 @@ Not affiliated with or endorsed by Casio. The BLE protocol was derived from the 
 | **Settings** | 24h/12h, button tone, auto-light, key vibration | `0x13` |
 | **Timers** | 5 interval timers (name + mm:ss) with auto-repeat | `0x2a`, `0x44` |
 | **Signal** | Push a notification to the watch (buzz + icon) | `0x30` |
+| **Profile** | Set wrist and gender | `0x45` |
+| **Activity** | Read today's step & calorie totals | `0x23` / `0x24` |
+| **Phone Finder** | Buzz the watch; hear it when the watch pings your phone | `0x30` / `0x0a` |
+| **World Time** | View home & world cities (read-only, see below) | `0x1f` |
 | **Readout** | Module name, firmware, home city, status block | `0x23` `0x20` `0x1f` `0x28` |
 
-**Planned (layout known, pending hardware verification):** world-city change (`0x1f`/`0x1e`/`0x1d`)
-and fitness profile / step goal (`0x45`/`0x43`). These are intentionally left out of the UI until
-confirmed on-device, because a bad write to the clock/timezone block is more disruptive than an alarm.
+**Not yet solved:**
+
+- **World-time *editing*** — reading cities works; writing a new city needs the exact timezone-index
+  bytes the GBD-200 expects, which requires a BLE capture of the official app. Reading is shipped; writing is not.
+- **Full profile** — height, weight and birthday are stored in `0x45` but not decoded reliably yet, so
+  only wrist/gender are editable.
+- **Live GPS running** — the RUNNING workout upload streams phone GPS in a proprietary format that isn't
+  reverse-engineered; not feasible from a Web Bluetooth tool.
 
 ## Use it — web app (no install)
 
@@ -59,6 +68,10 @@ python casio.py --address <ADDRESS>
 python set_alarm.py --address <ADDRESS> --alarm 3 --hour 6 --minute 45
 python set_alarm.py --address <ADDRESS> --alarm 2 --off
 python set_alarm.py --address <ADDRESS> --restore
+
+# Profile bits + activity
+python set_profile.py --address <ADDRESS> --wrist right --gender male
+python read_activity.py --address <ADDRESS>
 ```
 
 `scan.py` and `casio.py` take `--wait <seconds>` to keep retrying the connection, so you don't
