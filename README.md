@@ -31,10 +31,13 @@ World-time editing was reverse-engineered from a PacketLogger capture of the off
 wants a full session (`0x21` open, then `0x1d` pair + `0x1e` timezone + `0x1f` name for **both** slots,
 a `0x2f` config, `0x21` close). Verified live for Wellington, Tokyo and Las Vegas.
 
-**Not yet solved:**
+**Out of scope (not a tooling gap — the watch doesn't expose these):**
 
-- **Full profile** — height, weight and birthday are stored in `0x45` but not decoded reliably yet, so
-  only wrist/gender are editable.
+- **Full profile** — height, weight and birthday **never cross the Bluetooth link.** A full 88-minute
+  packet capture of the official app (including a complete settings sync) shows the profile frame `0x45`
+  staying byte-for-byte unchanged while those values were edited in the app. The G-SHOCK MOVE app keeps
+  height/weight/birthday on the phone and runs the calorie/distance math there; the watch only reports
+  raw steps. So only **wrist and gender** (the flags that *are* sent, in `0x45`) are editable.
 - **Live GPS running** — the RUNNING workout upload streams phone GPS in a proprietary format that isn't
   reverse-engineered; not feasible from a Web Bluetooth tool.
 
