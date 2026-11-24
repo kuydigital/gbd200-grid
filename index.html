@@ -573,6 +573,8 @@
   }
   async function writeBasic(which, on) {
     if (state.mode !== "live") return;
+    var prev = { h24: state.basic.h24, tone: state.basic.tone, light: state.basic.light, vib: state.basic.vib };
+    state.basic[which] = on; renderAll();   // optimistic: reflect intent on every tab immediately
     try {
       var cur = await request([0x13]); var arr = Array.from(cur);
       if (which === "h24")   { if (on) arr[1] |= 0x01; else arr[1] &= ~0x01; }
@@ -580,8 +582,8 @@
       if (which === "light") { if (on) arr[1] &= ~0x04; else arr[1] |= 0x04; }
       if (which === "vib")   { arr[10] = on ? 1 : 0; }
       await writeAll(arr); await delay(150); parseBasic(await request([0x13]));
-      renderDisplay(); renderInfo(); log("Setting: " + which + " &#8594; " + (on ? '<span class="g">ON</span>' : "OFF"));
-    } catch (e) { log("Setting write failed: " + e.message, "e"); renderDisplay(); }
+      renderAll(); log("Setting: " + which + " &#8594; " + (on ? '<span class="g">ON</span>' : "OFF"));
+    } catch (e) { state.basic = prev; renderAll(); log("Setting write failed (reverted): " + e.message, "e"); }
   }
 
   var NAME_RE = /[^A-Z0-9/+\-_!?&]/g;
