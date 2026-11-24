@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# G-Shock Grid — Casio GBD-200 BLE console. Copyright (c) 2026 KUYDIGITAL.
+# MIT License (see LICENSE). https://github.com/kuydigital/gbd200-grid
 """
 Read-modify-write-verify GBD-200 alarms.
 

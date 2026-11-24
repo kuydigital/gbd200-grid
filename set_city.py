@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# G-Shock Grid — Casio GBD-200 BLE console. Copyright (c) 2026 KUYDIGITAL.
+# MIT License (see LICENSE). https://github.com/kuydigital/gbd200-grid
 """
 Read-modify-write-verify the GBD-200 world-time city (feature 0x1f).
 

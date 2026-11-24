@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# G-Shock Grid — Casio GBD-200 BLE console. Copyright (c) 2026 KUYDIGITAL.
+# MIT License (see LICENSE). https://github.com/kuydigital/gbd200-grid
 """
 Set a GBD-200 world-time city (home slot 0 or world slot 1). Uses the real
 multi-frame session reverse-engineered from a capture of the official app.

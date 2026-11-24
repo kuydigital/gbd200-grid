@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# G-Shock Grid — Casio GBD-200 BLE console. Copyright (c) 2026 KUYDIGITAL.
+# MIT License (see LICENSE). https://github.com/kuydigital/gbd200-grid
 """
 Set GBD-200 profile bits (wrist / gender) in feature 0x45.
 Read-modify-write: only byte[1] bits change; all personal bytes are preserved.
