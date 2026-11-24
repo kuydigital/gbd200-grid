@@ -475,14 +475,30 @@
     $("fmtInd").textContent = state.basic.h24 ? "24H" : "12H";
     tick();
   }
+  function fmtHM(h, m) {
+    if (state.basic.h24) return pad(h) + ":" + pad(m);
+    return (h % 12 || 12) + ":" + pad(m) + " " + (h < 12 ? "AM" : "PM");
+  }
+  function rowHour(row) {
+    var h = parseInt(row.querySelector("[data-h]").value, 10) || 0, ap = row.querySelector("[data-ap]");
+    if (ap) { h = h % 12; if (ap.value === "PM") h += 12; }   // 12h editor -> 24h
+    return clamp(h, 0, 23);
+  }
   function renderAlarms() {
     var dis = state.mode !== "live" ? " disabled" : "", al = $("alarms"); al.innerHTML = "";
     state.alarms.forEach(function (a, i) {
-      var n = i + 1, row = document.createElement("div");
+      var n = i + 1, row = document.createElement("div"), editHour;
+      if (state.basic.h24) {
+        editHour = '<input type="number" min="0" max="23" value="' + a.h + '" data-h aria-label="AL' + n + ' hour"' + dis + '>';
+      } else {
+        var mer = a.h < 12 ? "AM" : "PM";
+        editHour = '<input type="number" min="1" max="12" value="' + (a.h % 12 || 12) + '" data-h aria-label="AL' + n + ' hour"' + dis + '>' +
+          '<select data-ap aria-label="AL' + n + ' AM/PM"' + dis + '><option' + (mer === "AM" ? " selected" : "") + '>AM</option><option' + (mer === "PM" ? " selected" : "") + '>PM</option></select>';
+      }
       row.className = "alarm"; row.setAttribute("data-n", n);
-      row.innerHTML = '<span class="idx">AL' + n + '</span><span class="t">' + pad(a.h) + ":" + pad(a.m) + '</span>' +
+      row.innerHTML = '<span class="idx">AL' + n + '</span><span class="t">' + fmtHM(a.h, a.m) + '</span>' +
         '<span class="state ' + (a.on ? "on" : "off") + '">' + (a.on ? "On" : "Off") + '</span>' +
-        '<span class="edit"><input type="number" min="0" max="23" value="' + a.h + '" data-h aria-label="AL' + n + ' hour"' + dis + '>' +
+        '<span class="edit">' + editHour +
         '<span class="colon-sep">:</span><input type="number" min="0" max="59" value="' + a.m + '" data-m aria-label="AL' + n + ' minute"' + dis + '>' +
         '<button class="mini" data-set' + dis + '>Set</button><button class="mini warn" data-toggle' + dis + '>' + (a.on ? "Off" : "On") + '</button></span>';
       al.appendChild(row);
@@ -606,7 +622,7 @@
         arr[o] = enable ? 0x40 : 0x00; arr[o + 1] = 0x40; arr[o + 2] = h; arr[o + 3] = m;
         await writeAll(arr); await delay(150); parseAlarm16(await request([0x16]));
       }
-      renderAlarms(); log("Alarm " + n + " &#8594; " + pad(h) + ":" + pad(m) + " " + (enable ? '<span class="g">ON</span>' : "OFF"));
+      renderAlarms(); log("Alarm " + n + " &#8594; " + fmtHM(h, m) + " " + (enable ? '<span class="g">ON</span>' : "OFF"));
     } catch (e) { log("Alarm " + n + " write failed: " + e.message, "e"); }
   }
   async function writeBasic(which, on) {
@@ -772,7 +788,7 @@
   $("alarms").addEventListener("click", function (ev) {
     var btn = ev.target.closest("button"), row = ev.target.closest(".alarm"); if (!btn || !row) return;
     var n = parseInt(row.getAttribute("data-n"), 10), a = state.alarms[n - 1];
-    if (btn.hasAttribute("data-set")) writeAlarm(n, clamp(parseInt(row.querySelector("[data-h]").value, 10) || 0, 0, 23), clamp(parseInt(row.querySelector("[data-m]").value, 10) || 0, 0, 59), true);
+    if (btn.hasAttribute("data-set")) writeAlarm(n, rowHour(row), clamp(parseInt(row.querySelector("[data-m]").value, 10) || 0, 0, 59), true);
     else if (btn.hasAttribute("data-toggle")) writeAlarm(n, a.h, a.m, !a.on);
   });
   $("sw24").addEventListener("click", function () { writeBasic("h24", !state.basic.h24); });
