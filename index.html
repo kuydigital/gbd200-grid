@@ -30,7 +30,7 @@
     padding-block: clamp(16px, 4vw, 34px);
     overflow-x: hidden;
   }
-  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .wrap { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 
   /* top bar */
   .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -69,7 +69,7 @@
   button.warn:hover { color: #ffd892; border-color: var(--amber); }
 
   /* mode tabs */
-  .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
   .tab { flex: 0 0 auto; font-family: "Chakra Petch", sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted); background: var(--resin-1); border: 1px solid var(--edge);
     border-radius: 5px; padding: 9px 14px; box-shadow: 0 2px 0 rgba(0,0,0,0.4); }
@@ -201,7 +201,7 @@
   <section data-sec="system">
     <div class="panel">
       <div class="lcd">
-        <div class="lcd-top"><span id="modeLabel">TIME</span><span class="ind" id="fmtInd">24H</span></div>
+        <div class="lcd-top"><span id="modeLabel">TIME</span><span class="ind"><b id="mer"></b> <span id="fmtInd">24H</span></span></div>
         <div class="dow" id="dow"></div>
         <div class="big"><span class="ghost">88:88</span><span class="digits" id="time">--:--</span><span class="secs" id="secs">--</span></div>
         <div class="lcd-bot"><span id="dateLine">&#8212;</span><span>UNIT <b id="unit">GBD&#8209;200</b></span></div>
@@ -434,8 +434,15 @@
   var DOWF = ["SU","MO","TU","WE","TH","FR","SA"], MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
   (function buildDow() { var d = $("dow"); DOWF.forEach(function (w) { var s = document.createElement("span"); s.textContent = w; d.appendChild(s); }); })();
   function tick() {
-    var d = new Date(), day = d.getDay();
-    $("time").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
+    var d = new Date(), day = d.getDay(), h = d.getHours(), mer = "";
+    if (state.basic.h24) {
+      $("time").textContent = pad(h) + ":" + pad(d.getMinutes());
+    } else {
+      mer = h < 12 ? "AM" : "PM";
+      var h12 = h % 12; if (h12 === 0) h12 = 12;
+      $("time").textContent = h12 + ":" + pad(d.getMinutes());
+    }
+    $("mer").textContent = mer;
     $("secs").textContent = pad(d.getSeconds());
     $("dateLine").textContent = MON[d.getMonth()] + " " + pad(d.getDate());
     var spans = $("dow").children;
@@ -466,6 +473,7 @@
     $("tCity").textContent = state.city || "—";
     $("tStatus").textContent = state.status || "—";
     $("fmtInd").textContent = state.basic.h24 ? "24H" : "12H";
+    tick();
   }
   function renderAlarms() {
     var dis = state.mode !== "live" ? " disabled" : "", al = $("alarms"); al.innerHTML = "";
