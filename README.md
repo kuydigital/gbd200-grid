@@ -24,13 +24,15 @@ Not affiliated with or endorsed by Casio. The BLE protocol was derived from the 
 | **Profile** | Set wrist and gender | `0x45` |
 | **Activity** | Read today's step & calorie totals | `0x23` / `0x24` |
 | **Phone Finder** | Buzz the watch; hear it when the watch pings your phone | `0x30` / `0x0a` |
-| **World Time** | View home & world cities (read-only, see below) | `0x1f` |
+| **World Time** | Set home & world cities from a 30-city table | `0x21`/`0x1d`/`0x1e`/`0x1f` |
 | **Readout** | Module name, firmware, home city, status block | `0x23` `0x20` `0x1f` `0x28` |
+
+World-time editing was reverse-engineered from a PacketLogger capture of the official app: the watch
+wants a full session (`0x21` open, then `0x1d` pair + `0x1e` timezone + `0x1f` name for **both** slots,
+a `0x2f` config, `0x21` close). Verified live for Wellington, Tokyo and Las Vegas.
 
 **Not yet solved:**
 
-- **World-time *editing*** — reading cities works; writing a new city needs the exact timezone-index
-  bytes the GBD-200 expects, which requires a BLE capture of the official app. Reading is shipped; writing is not.
 - **Full profile** — height, weight and birthday are stored in `0x45` but not decoded reliably yet, so
   only wrist/gender are editable.
 - **Live GPS running** — the RUNNING workout upload streams phone GPS in a proprietary format that isn't
@@ -72,6 +74,10 @@ python set_alarm.py --address <ADDRESS> --restore
 # Profile bits + activity
 python set_profile.py --address <ADDRESS> --wrist right --gender male
 python read_activity.py --address <ADDRESS>
+
+# World time (--list to see all cities)
+python set_worldtime.py --address <ADDRESS> --city TOKYO
+python set_worldtime.py --address <ADDRESS> --city LONDON --slot 0
 ```
 
 `scan.py` and `casio.py` take `--wait <seconds>` to keep retrying the connection, so you don't

@@ -14,3 +14,12 @@ probe.py
 verify.py
 worldtime_test.py
 profile_test.py
+
+# More exploratory/capture-replay dev scripts (hardcoded address)
+worldtime_apply.py
+worldtime_set.py
+
+# Personal BLE captures
+*.pklg
+*.pcapng
+btsnoop*.log
