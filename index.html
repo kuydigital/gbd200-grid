@@ -313,10 +313,10 @@
         <div class="tile"><div class="k">Home City</div><div class="v" id="sCity">&#8212;</div></div>
         <div class="tile"><div class="k">Watch Condition &#183; 0x28</div><div class="v small" id="sCond">&#8212;</div></div>
         <div class="tile"><div class="k">Last Readout</div><div class="v small" id="sSync">&#8212;</div></div>
-        <div class="tile"><div class="k">Battery</div><div class="v small" id="sBatt">On&#8209;watch only</div></div>
+        <div class="tile"><div class="k">Battery</div><div class="v small" id="sBatt">No gauge</div></div>
       </div>
       <div class="actions"><button id="refreshBtn2" class="primary" disabled>Refresh Status</button></div>
-      <p class="note" style="margin-top:12px"><b>About battery:</b> the GBD&#8209;200 does <b>not</b> broadcast its battery level over Bluetooth. This is confirmed against the full protocol reverse&#8209;engineering and Gadgetbridge &#8212; neither reads a battery field for this watch family, and the watch's condition frame carries none. The only battery reading is the indicator on the watch itself. This tab shows the live <b>watch&#8209;condition block</b> and link health, which the watch <i>does</i> report.</p>
+      <p class="note" style="margin-top:12px"><b>About battery:</b> the GBD&#8209;200 has <b>no battery gauge at all</b> &#8212; not over Bluetooth and not on the watch. Its Bluetooth services expose no standard Battery Service (<code>0x180F</code>), and the Casio frames carry no battery field; the watch only flashes a <b>low&#8209;battery warning</b> when the coin cell is nearly dead. There is no level or percentage to read anywhere. This tab shows the live <b>watch&#8209;condition block</b> and link health instead, which the watch <i>does</i> report.</p>
     </div>
   </section>
 
