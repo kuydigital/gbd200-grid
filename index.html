@@ -850,11 +850,12 @@
   async function readActivity() {
     if (state.mode !== "live" || !bt.c23) { log("Activity channel unavailable on this watch.", "e"); return; }
     convoyBuf = [];
+    stopKeepAlive();   // keep the 0x28 poll from interrupting the convoy stream mid-read
     try {
       log("Requesting activity…");
       await bt.c23.writeValueWithResponse(new Uint8Array([0x00, 0x11, 0x00, 0x00, 0x00]));
-      await delay(3000);
-      if (convoyBuf.length < 13) { log("No activity payload (" + convoyBuf.length + " bytes).", "o"); return; }
+      await delay(4000);
+      if (convoyBuf.length < 13) { log("No activity payload (" + convoyBuf.length + " bytes received on 0x24).", "o"); return; }
       var raw = convoyBuf.map(function (b) { return (~b) & 0xff; });
       var steps = (raw[7] | (raw[8] << 8) | (raw[9] << 16) | (raw[10] << 24)) >>> 0;
       if (steps === 0xfffffffe) steps = 0;
@@ -862,6 +863,7 @@
       state.activity = { date: (2000 + raw[2]) + "-" + pad(raw[3]) + "-" + pad(raw[4]), steps: steps, cals: cals };
       renderActivity(); log("Activity: " + steps + " steps, " + cals + " cal.", "g");
     } catch (e) { log("Activity read failed: " + e.message, "e"); }
+    finally { if (state.mode === "live") startKeepAlive(); }
   }
 
   // ---- phone finder ----
