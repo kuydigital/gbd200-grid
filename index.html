@@ -140,9 +140,10 @@
   .alarm .mini { padding: 7px 10px; font-size: 10px; }
   .colon-sep { color: var(--amber); font-family: "Share Tech Mono", monospace; }
 
-  input[type="number"], input[type="text"], select {
+  input[type="number"], input[type="text"], input[type="time"], select {
     font-family: "Share Tech Mono", monospace; font-size: 15px; color: var(--lcd-on); background: var(--lcd-bg);
     border: 1px solid var(--edge); border-radius: 4px; padding: 7px 8px; }
+  input[type="time"] { font-variant-numeric: tabular-nums; }
   input[type="number"] { width: 54px; text-align: center; }
   input[type="text"] { letter-spacing: 0.06em; }
   input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
@@ -267,8 +268,16 @@
         <div class="toggle"><span class="lab">Key Vibration<small>haptic feedback</small></span><button class="sw" id="swVib" aria-pressed="false" aria-label="key vibration" disabled></button></div>
         <div class="toggle"><span class="lab">Keep Auto Light On<small>re-enable while connected (beats the 6h auto-off)</small></span><button class="sw" id="swKeepLight" aria-pressed="false" aria-label="keep auto light on"></button></div>
       </div>
+      <div class="grid2" id="sleepCfg" style="margin-top:10px" hidden>
+        <div class="toggle"><span class="lab">Sleep Schedule<small>disconnect overnight to spare the battery</small></span><button class="sw" id="swSleep" aria-pressed="false" aria-label="sleep schedule"></button></div>
+        <div class="row" id="sleepTimes" hidden>
+          <label class="k-label">From</label><input type="time" id="sleepFrom" value="23:00" aria-label="sleep start">
+          <label class="k-label">To</label><input type="time" id="sleepTo" value="07:00" aria-label="sleep end">
+        </div>
+      </div>
       <p class="note" style="margin-top:12px">Each toggle reads the watch's current 0x13 block, flips one bit, and writes it back &#8212; all other settings preserved.</p>
-      <p class="note"><b>Keep Auto Light On</b> is a companion-side workaround: the GBD&#8209;200's firmware turns Auto Light off by itself after about 6 hours and there's no setting to stop that. While this page stays <b>connected</b>, it re-enables Auto Light whenever the watch lets it lapse. It runs automatically whenever Grid Console is connected, and defeating the timeout uses a little more battery.</p>
+      <p class="note"><b>Keep Auto Light On</b> is a companion-side workaround: the GBD&#8209;200's firmware turns Auto Light off by itself after about 6 hours and there's no setting to stop that. While connected, Grid Console re-enables Auto Light whenever the watch lets it lapse.</p>
+      <p class="note"><b>Sleep Schedule</b> protects the watch's multi-year battery: during these hours Grid Console releases the Bluetooth link so the watch isn't kept awake, then reconnects when the window ends (while the app is open). Set it to your sleeping hours &#8212; you won't be tilting for the light then anyway.</p>
     </div>
   </section>
 
@@ -412,9 +421,11 @@
     cities: ["—", "—"],
     profile: { female:false, right:false },
     activity: { date:"—", steps:"—", cals:"—" },
-    keepLight: false
+    keepLight: false,
+    sleep: { on: false, from: "23:00", to: "07:00" }   // release the watch during these hours to save battery
   };
   var bt = { device:null, server:null, req:null, all:null, note:null, c23:null, c24:null, pending:null };
+  var sleepTimer = null, sleepingNow = false;   // sleepingNow: we released the link for the sleep window
   var convoyBuf = [];
   // Keep Auto Light On: the GBD-200 firmware auto-disables Auto Light after ~6h.
   // We can't switch off that timer (no protocol field for it), so we poll the 0x13
@@ -549,6 +560,11 @@
     $("swLight").setAttribute("aria-pressed", state.basic.light ? "true" : "false");
     $("swVib").setAttribute("aria-pressed", state.basic.vib ? "true" : "false");
     $("swKeepLight").setAttribute("aria-pressed", state.keepLight ? "true" : "false");
+    $("sleepCfg").hidden = !state.keepLight;                               // sleep is a sub-option of Keep Auto Light On
+    $("swSleep").setAttribute("aria-pressed", state.sleep.on ? "true" : "false");
+    $("sleepTimes").hidden = !state.sleep.on;
+    $("sleepFrom").value = state.sleep.from;
+    $("sleepTo").value = state.sleep.to;
   }
   function renderTimers() {
     var dis = state.mode !== "live" ? " disabled" : "", t = $("timers"); t.innerHTML = "";
@@ -612,7 +628,8 @@
       bt.device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "CASIO" }], optionalServices: [SVC] });
       bt.device.addEventListener("gattserverdisconnected", function () {
         if (state.mode !== "live") return;
-        stopKeepAlive(); stopKeepLight(); setMode("offline");
+        stopKeepAlive(); stopKeepLight(); setMode("offline");   // note: sleep scheduler stays running so it can reconnect at wake
+        if (sleepingNow) { log("Watch released for the sleep window &#8212; reconnecting at " + state.sleep.to + ".", "o"); return; }
         if (bt.synced) log("Connection lost &#8212; tap Connect to reconnect.", "o");
         else log("Couldn't complete the sync. If the watch isn't paired to this iPhone yet, pair it first (accept the Bluetooth pairing prompt), then Connect.", "e");
       });
@@ -635,7 +652,7 @@
       await refresh();
       bt.synced = true;
       try { localStorage.setItem("gc_paired", "1"); } catch (e) {}   // seen a successful link; drop the first-run hint
-      if (state.keepLight) { if (!state.basic.light) { try { await writeBasic("light", true); } catch (e) {} } startKeepLight(); log("Auto Light keepalive active.", "g"); }
+      if (state.keepLight) { if (!state.basic.light) { try { await writeBasic("light", true); } catch (e) {} } startKeepLight(); startSleepSched(); log("Auto Light keepalive active.", "g"); }
       log("Synced &#8212; connection is live.", "g");
     } catch (e) {
       log("Connect failed: " + (e && e.message ? e.message : e), "e");
@@ -645,6 +662,7 @@
   function disconnect() {
     stopKeepAlive();
     stopKeepLight();
+    stopSleepSched(); sleepingNow = false;   // a manual disconnect should not auto-reconnect
     try { if (bt.device && bt.device.gatt && bt.device.gatt.connected) bt.device.gatt.disconnect(); } catch (e) {}
     bt.device = bt.server = bt.req = bt.all = bt.note = bt.c23 = bt.c24 = null;
     setMode("offline"); log("Disconnected.");
@@ -720,16 +738,48 @@
   function stopKeepLight() { if (keepLightTimer) { clearInterval(keepLightTimer); keepLightTimer = null; } }
   async function keepLightCheck() {
     if (state.mode !== "live" || !state.keepLight) { stopKeepLight(); return; }
-    if (bt.pending) return;   // don't collide with a request already in flight
+    if (inSleep() || bt.pending) return;   // asleep, or a request is already in flight
     try {
       var bs = await request([0x13]);
       if (bs) { parseBasic(bs); if (!state.basic.light) { log("Auto Light had lapsed &#8212; re-enabling.", "o"); await writeBasic("light", true); } }
     } catch (e) {}
   }
   function startKeepLight() { stopKeepLight(); keepLightTimer = setInterval(keepLightCheck, KEEP_LIGHT_MS); }
+
+  // Sleep schedule: during the window, release the BLE link so the watch isn't kept awake
+  // (protects its multi-year battery), then reconnect when the window ends. Native app only
+  // (desktop connect() shows a device picker), and only while the app is actually running.
+  function parseHM(s) { var p = (s || "0:0").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); }
+  function inSleep() {
+    if (!state.sleep.on) return false;
+    var d = new Date(), n = d.getHours() * 60 + d.getMinutes(), f = parseHM(state.sleep.from), t = parseHM(state.sleep.to);
+    if (f === t) return false;
+    return f < t ? (n >= f && n < t) : (n >= f || n < t);   // handles an overnight window (from > to)
+  }
+  function stopSleepSched() { if (sleepTimer) { clearInterval(sleepTimer); sleepTimer = null; } }
+  function startSleepSched() {
+    stopSleepSched();
+    if (!window.__nativeBridge) return;
+    sleepTimer = setInterval(sleepTick, 30000);
+    sleepTick();
+  }
+  function sleepTick() {
+    if (!state.keepLight || !state.sleep.on) { sleepingNow = false; stopSleepSched(); return; }
+    if (inSleep()) {
+      if (state.mode === "live" && !sleepingNow) {
+        sleepingNow = true;
+        log("Sleep window &#8212; releasing the watch to save battery (until " + state.sleep.to + ").", "o");
+        try { if (bt.device && bt.device.gatt && bt.device.gatt.connected) bt.device.gatt.disconnect(); } catch (e) {}
+      }
+    } else if (sleepingNow) {
+      sleepingNow = false;
+      if (state.mode !== "live") { log("Sleep over &#8212; reconnecting.", "g"); connect(); }
+    }
+  }
   async function setKeepLight(on) {
     state.keepLight = on; renderDisplay();
     if (on) {
+      startSleepSched();
       if (state.mode === "live") {
         log("Keep Auto Light On: enabled &#8212; will re-enable if the watch's 6h timer turns it off.", "g");
         if (!state.basic.light) { try { await writeBasic("light", true); } catch (e) {} }
@@ -737,7 +787,12 @@
       } else {
         log("Keep Auto Light On: armed &#8212; takes effect once you Connect.", "o");
       }
-    } else { stopKeepLight(); log("Keep Auto Light On: disabled."); }
+    } else { stopKeepLight(); stopSleepSched(); sleepingNow = false; log("Keep Auto Light On: disabled."); }
+  }
+  function setSleep(on) {
+    state.sleep.on = on; renderDisplay();
+    if (on) { startSleepSched(); log("Sleep schedule on: " + state.sleep.from + "&#8211;" + state.sleep.to + " &#8212; the watch is released during these hours.", "o"); }
+    else { stopSleepSched(); sleepingNow = false; log("Sleep schedule off."); }
   }
 
   var NAME_RE = /[^A-Z0-9/+\-_!?&]/g;
@@ -901,6 +956,9 @@
   $("swLight").addEventListener("click", function () { writeBasic("light", !state.basic.light); });
   $("swVib").addEventListener("click", function () { writeBasic("vib", !state.basic.vib); });
   $("swKeepLight").addEventListener("click", function () { setKeepLight(!state.keepLight); });
+  $("swSleep").addEventListener("click", function () { setSleep(!state.sleep.on); });
+  $("sleepFrom").addEventListener("change", function () { state.sleep.from = this.value || "23:00"; if (state.sleep.on) startSleepSched(); });
+  $("sleepTo").addEventListener("change", function () { state.sleep.to = this.value || "07:00"; if (state.sleep.on) startSleepSched(); });
   $("sendTimers").addEventListener("click", sendTimers);
   $("sendNote").addEventListener("click", function () { sendNotification(false); });
   $("clearNote").addEventListener("click", function () { sendNotification(true); });
@@ -922,6 +980,7 @@
     state.profile = { female:false, right:false };
     state.activity = { date:new Date().toLocaleDateString(), steps:"8,420", cals:"312" };
     state.keepLight = true;
+    state.sleep = { on: true, from: "23:00", to: "07:00" };
     setMode("live"); renderAll();
     log("Attaching to watch&#8230;");
     log("Ready &#8212; 6 characteristics.", "g");
