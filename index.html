@@ -383,9 +383,9 @@
 
   <p class="note">
     <b>What this is:</b> the GBD&#8209;200's own LCD is fixed in ROM and can't be reskinned. This is a <b>companion console</b>
-    that reads and writes the watch's real settings over Web Bluetooth (Chrome / Edge) &mdash; time, alarms, timers,
+    that reads and writes the watch's real settings over Bluetooth &mdash; time, alarms, timers,
     settings, notifications and world time, all verified on hardware.
-    Not affiliated with or endorsed by Casio. Protocol derived from the open-source Gadgetbridge project.
+    Not affiliated with or endorsed by Casio.
   </p>
 
   <p class="copyright">Copyright &copy; 2026 KUYDIGITAL</p>
@@ -908,9 +908,32 @@
   $("findWatch").addEventListener("click", findWatch);
   $("applyCity").addEventListener("click", applyWorldCity);
 
+  // Screenshot/preview mode: fill realistic sample data so the UI looks fully populated
+  // without a watch. Activated only via a launch argument in the iOS Simulator.
+  function enterPreview() {
+    state.name = "CASIO GBD-200"; state.fw = "1.0.3"; state.city = "MANILA"; state.status = "NORMAL";
+    state.lastSync = new Date().toLocaleTimeString();
+    state.alarms = [ {h:6,m:30,on:true},{h:7,m:0,on:false},{h:8,m:15,on:true},{h:12,m:0,on:false},{h:18,m:45,on:false} ];
+    state.basic = { h24:true, tone:true, light:true, vib:false };
+    state.timers = [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"SPRINT",min:0,sec:20},{name:"COOL",min:3,sec:0} ];
+    state.cities = ["MANILA","TOKYO"];
+    state.profile = { female:false, right:false };
+    state.activity = { date:new Date().toLocaleDateString(), steps:"8,420", cals:"312" };
+    state.keepLight = true;
+    setMode("live"); renderAll();
+    log("Attaching to watch&#8230;");
+    log("Ready &#8212; 6 characteristics.", "g");
+    log("Readout refreshed.", "g");
+    log("Auto Light keepalive active.", "g");
+    log("Synced &#8212; connection is live.", "g");
+    var t = window.__previewTab && document.querySelector('.tab[data-sec="' + window.__previewTab + '"]');
+    if (t) t.click();
+  }
+
   // ---- boot ----
   renderAll();
-  if (hasBluetooth()) { setMode("offline"); log("Ready. Hit <b>Connect</b> and pick CASIO GBD-200.", "g"); }
+  if (window.__preview) { enterPreview(); }
+  else if (hasBluetooth()) { setMode("offline"); log("Ready. Hit <b>Connect</b> and pick CASIO GBD-200.", "g"); }
   else { setMode("demo"); log("Preview mode — Web Bluetooth not available in this frame.", "o"); log("Open in Chrome/Edge (https or local file) for live control."); }
 })();
 </script>
