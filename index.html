@@ -250,9 +250,9 @@
   <!-- ALARMS -->
   <section data-sec="alarms" hidden>
     <div class="panel">
-      <p class="eyebrow">Alarms &#183; AL1&#8211;AL5</p>
+      <p class="eyebrow">Alarms &#183; AL1&#8211;AL4</p>
       <div class="alist" id="alarms"></div>
-      <p class="note" style="margin-top:12px">Edit a time then hit <b>Set</b>, or flip <b>On/Off</b>. AL1 uses feature 0x15; AL2&#8211;AL5 share the 0x16 block.</p>
+      <p class="note" style="margin-top:12px">Edit a time then hit <b>Set</b>, or flip <b>On/Off</b>. The GBD&#8209;200 has 4 alarms &#8212; AL1 uses feature 0x15; AL2&#8211;AL4 share the 0x16 block.</p>
     </div>
   </section>
 
@@ -405,7 +405,7 @@
   // Generic seed shown before a watch is connected (not anyone's real data).
   var state = {
     mode: "offline", name: "CASIO GBD-200", fw: "—", city: "—", status: "—", lastSync: "—",
-    alarms: [ {h:6,m:0,on:false},{h:7,m:0,on:false},{h:8,m:0,on:false},{h:12,m:0,on:false},{h:18,m:0,on:false} ],
+    alarms: [ {h:6,m:0,on:false},{h:7,m:0,on:false},{h:8,m:0,on:false},{h:12,m:0,on:false} ],   // GBD-200 has 4 alarms (AL1 + AL2-AL4)
     basic: { h24:true, tone:true, light:false, vib:false },
     repeat: 1,
     timers: [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"",min:0,sec:0},{name:"",min:0,sec:0} ],
@@ -574,12 +574,14 @@
   function request(bytes) {
     return new Promise(function (resolve, reject) {
       var want = bytes[0];   // the watch echoes the feature code as byte 0 of its reply
+      // For sub-indexed features (e.g. world-time slot 0x1f/0x1e/0x1d, timer-name 0x44) the
+      // reply echoes the index at byte 1. Match it too, so a slot-0 frame can't satisfy a
+      // slot-1 read (that bug showed World City always reading back as the Home city).
+      var wantSub = bytes.length > 1 ? bytes[1] : null;
       var timer = setTimeout(function () { bt.pending = null; reject(new Error("timeout")); }, 4000);
-      // Correlate by feature code: the watch also pushes its own (unsolicited) frames right
-      // after connecting, and matching purely by arrival order mis-assigns them to the wrong
-      // read (e.g. a Home City frame landing in the Status tile). Only accept the matching reply.
       bt.pending = function (a) {
-        if (a.length && a[0] !== want) return false;   // not ours — leave pending armed
+        if (a.length && a[0] !== want) return false;                  // wrong feature — not ours
+        if (wantSub !== null && (a.length < 2 || a[1] !== wantSub)) return false;  // wrong slot/index
         clearTimeout(timer); bt.pending = null; resolve(a); return true;
       };
       bt.req.writeValueWithoutResponse(new Uint8Array(bytes)).catch(function (e) { clearTimeout(timer); bt.pending = null; reject(e); });
@@ -649,7 +651,7 @@
   }
 
   function parseAlarm15(a) { return { on: (a[1] & 0x40) === 0x40, h: a[3], m: a[4] }; }
-  function parseAlarm16(a) { for (var i = 0; i < 4; i++) { var o = 1 + i * 4; state.alarms[i + 1] = { on: (a[o] & 0x40) === 0x40, h: a[o + 2], m: a[o + 3] }; } }
+  function parseAlarm16(a) { for (var i = 0; i < 3; i++) { var o = 1 + i * 4; state.alarms[i + 1] = { on: (a[o] & 0x40) === 0x40, h: a[o + 2], m: a[o + 3] }; } }   // AL2-AL4 (3 alarms in the 0x16 block)
   function parseBasic(a) { state.basic = { h24: (a[1] & 0x01) !== 0, tone: (a[1] & 0x02) === 0, light: (a[1] & 0x04) === 0, vib: a[10] === 0x01 }; }
   function unbcd(b) { if (b == null) return 0; return ((b >> 4) & 0x0f) * 10 + (b & 0x0f); }
 
@@ -657,7 +659,7 @@
     if (state.mode !== "live") return;
     var nm = await safeRead([0x23]); if (nm) state.name = ascii(nm, 1);
     var fw = await safeRead([0x20]); if (fw) state.fw = fw[1] + "." + fw[2] + "." + fw[3];
-    var ct = await safeRead([0x1f]); if (ct) state.city = ascii(ct, 2);
+    var ct = await safeRead([0x1f, 0]); if (ct) state.city = ascii(ct, 2);
     var st = await safeRead([0x28]); if (st) { state.status = hexRange(st, 1, 7); }
     var a1 = await safeRead([0x15]); if (a1) state.alarms[0] = parseAlarm15(a1);
     var a2 = await safeRead([0x16]); if (a2) parseAlarm16(a2);
@@ -913,7 +915,7 @@
   function enterPreview() {
     state.name = "CASIO GBD-200"; state.fw = "1.0.3"; state.city = "MANILA"; state.status = "NORMAL";
     state.lastSync = new Date().toLocaleTimeString();
-    state.alarms = [ {h:6,m:30,on:true},{h:7,m:0,on:false},{h:8,m:15,on:true},{h:12,m:0,on:false},{h:18,m:45,on:false} ];
+    state.alarms = [ {h:6,m:30,on:true},{h:7,m:0,on:false},{h:8,m:15,on:true},{h:12,m:0,on:false} ];
     state.basic = { h24:true, tone:true, light:true, vib:false };
     state.timers = [ {name:"WARMUP",min:5,sec:0},{name:"RUN",min:1,sec:0},{name:"WALK",min:0,sec:30},{name:"SPRINT",min:0,sec:20},{name:"COOL",min:3,sec:0} ];
     state.cities = ["MANILA","TOKYO"];
