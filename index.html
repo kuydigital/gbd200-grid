@@ -723,18 +723,12 @@
   }
 
   // ---- keep auto light on (companion-side, defeats the firmware 6h auto-off) ----
-  // Keep-alive: generate a little link traffic so a native BLE bridge (iOS) doesn't
-  // drop the connection on a supervision timeout while idle. No-op in desktop browsers.
   function stopKeepAlive() { if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; } }
-  function startKeepAlive() {
-    stopKeepAlive();
-    if (!window.__nativeBridge) return;   // only needed under the native Core Bluetooth bridge
-    keepAliveTimer = setInterval(function () {
-      if (state.mode !== "live") { stopKeepAlive(); return; }
-      if (bt.pending) return;             // never collide with an in-flight request
-      safeRead([0x28]);                   // benign status read; result ignored, link stays warm
-    }, KEEP_ALIVE_MS);
-  }
+  // Once the watch is bonded the BLE link stays up on its own, so the old 2-second keep-alive
+  // poll is unnecessary — it only drained the battery and contended with reads (it was making the
+  // watch reject the activity convoy write with an app ATT error). Kept as a no-op so existing
+  // call sites stay valid. (The poll only ever ran under the native bonded bridge anyway.)
+  function startKeepAlive() { stopKeepAlive(); }
   function stopKeepLight() { if (keepLightTimer) { clearInterval(keepLightTimer); keepLightTimer = null; } }
   async function keepLightCheck() {
     if (state.mode !== "live" || !state.keepLight) { stopKeepLight(); return; }
@@ -849,21 +843,30 @@
   // ---- activity (convoy 0x23/0x24) ----
   async function readActivity() {
     if (state.mode !== "live" || !bt.c23) { log("Activity channel unavailable on this watch.", "e"); return; }
-    convoyBuf = [];
-    stopKeepAlive();   // keep the 0x28 poll from interrupting the convoy stream mid-read
-    try {
-      log("Requesting activity…");
-      await bt.c23.writeValueWithResponse(new Uint8Array([0x00, 0x11, 0x00, 0x00, 0x00]));
-      await delay(4000);
-      if (convoyBuf.length < 13) { log("No activity payload (" + convoyBuf.length + " bytes received on 0x24).", "o"); return; }
-      var raw = convoyBuf.map(function (b) { return (~b) & 0xff; });
-      var steps = (raw[7] | (raw[8] << 8) | (raw[9] << 16) | (raw[10] << 24)) >>> 0;
-      if (steps === 0xfffffffe) steps = 0;
-      var cals = raw[11] | (raw[12] << 8); if (cals === 0xfffe) cals = 0;
-      state.activity = { date: (2000 + raw[2]) + "-" + pad(raw[3]) + "-" + pad(raw[4]), steps: steps, cals: cals };
-      renderActivity(); log("Activity: " + steps + " steps, " + cals + " cal.", "g");
-    } catch (e) { log("Activity read failed: " + e.message, "e"); }
-    finally { if (state.mode === "live") startKeepAlive(); }
+    bt.pending = null;   // abandon any in-flight request so it can't collide with the convoy trigger
+    log("Requesting activity…");
+    var ok = false;
+    for (var attempt = 1; attempt <= 3 && !ok; attempt++) {
+      convoyBuf = [];
+      try {
+        // Casio convoy trigger: write to 0x23, watch streams the (inverted) payload on 0x24.
+        await bt.c23.writeValueWithResponse(new Uint8Array([0x00, 0x11, 0x00, 0x00, 0x00]));
+        await delay(4000);
+        ok = convoyBuf.length >= 13;
+      } catch (e) {
+        // The watch sometimes rejects the trigger with an app ATT error (0x81) if it's busy.
+        if (attempt === 3) { log("Activity read failed: " + e.message, "e"); return; }
+        log("Watch busy &#8212; retrying activity read…", "o");
+      }
+      if (!ok && attempt < 3) await delay(900);
+    }
+    if (!ok) { log("No activity payload (" + convoyBuf.length + " bytes received on 0x24).", "o"); return; }
+    var raw = convoyBuf.map(function (b) { return (~b) & 0xff; });
+    var steps = (raw[7] | (raw[8] << 8) | (raw[9] << 16) | (raw[10] << 24)) >>> 0;
+    if (steps === 0xfffffffe) steps = 0;
+    var cals = raw[11] | (raw[12] << 8); if (cals === 0xfffe) cals = 0;
+    state.activity = { date: (2000 + raw[2]) + "-" + pad(raw[3]) + "-" + pad(raw[4]), steps: steps, cals: cals };
+    renderActivity(); log("Activity: " + steps + " steps, " + cals + " cal.", "g");
   }
 
   // ---- phone finder ----

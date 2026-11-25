@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>GridConsole — Help &amp; FAQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0b0d0f; color: #cdd5da;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif; line-height: 1.6;
+    padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 48px max(20px, env(safe-area-inset-left)); }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 24px; letter-spacing: 0.02em; }
+  h1 b { color: #2f90d8; }
+  h2 { font-size: 17px; margin-top: 30px; color: #eaf4fb; }
+  a { color: #2f90d8; }
+  .muted { color: #69747f; font-size: 13px; }
+  .tip { border-left: 3px solid #2f90d8; padding: 2px 0 2px 14px; margin: 14px 0; }
+  code { color: #9fd0ef; }
+</style>
+<main>
+  <h1>GRID<b>//</b>CONSOLE &mdash; Help &amp; FAQ</h1>
+  <p class="muted">Companion app for Casio GBD&#8209;200 (module 3506) watches.</p>
+
+  <h2>Which watches are supported?</h2>
+  <p>Any Casio watch built on <strong>module 3506</strong> — the GBD&#8209;200 series (GBD&#8209;200&#8209;1,
+  &#8209;2, &#8209;9, &#8209;7, &#8209;1A1, RD&#8209;4, LM&#8209;1, UU&#8209;1/UU&#8209;9, SM&#8209;1A5/1A6, and
+  regional editions). Check the caseback or manual for &ldquo;module 3506&rdquo;.</p>
+
+  <h2>How do I connect the first time?</h2>
+  <ol>
+    <li>On the watch, hold the lower&#8209;left button to enter <code>CONNECT</code> (pairing) mode.</li>
+    <li>In GridConsole, tap <strong>Connect</strong> and allow Bluetooth.</li>
+    <li>Accept the iOS <strong>&ldquo;Bluetooth Pairing Request&rdquo;</strong> when it appears.</li>
+  </ol>
+  <p>After that one-time pairing the watch stays bonded, and the app reconnects on its own.</p>
+
+  <h2>It won&rsquo;t connect, keeps dropping, or a read fails — what do I do?</h2>
+  <div class="tip">
+    <strong>Forget the watch and pair again.</strong> Open iOS <strong>Settings → Bluetooth</strong>,
+    tap the ⓘ next to <em>CASIO GBD&#8209;200</em>, choose <strong>Forget This Device</strong>, then
+    reconnect from GridConsole and accept the pairing prompt. This clears a stale bond and resolves
+    most connection or read problems (including activity/steps not loading).
+  </div>
+  <p>Also make sure no other app (such as Casio&rsquo;s own) is holding the watch at the same time —
+  Bluetooth allows one connection.</p>
+
+  <h2>Do I need the official Casio app?</h2>
+  <p>No. GridConsole pairs and talks to the watch on its own.</p>
+
+  <h2>Will keeping it connected drain the watch battery?</h2>
+  <p>The watch is built for multi&#8209;year battery life. GridConsole keeps radio traffic minimal, and
+  <strong>Keep Auto Light On</strong> includes a <strong>Sleep Schedule</strong> that releases the
+  Bluetooth link during the hours you set (e.g. overnight), so the watch isn&rsquo;t kept awake.</p>
+
+  <h2>My watch&rsquo;s Auto Light keeps switching itself off.</h2>
+  <p>That&rsquo;s the GBD&#8209;200 firmware disabling tilt&#8209;to&#8209;light after about 6 hours. Turn on
+  <strong>Keep Auto Light On</strong> (Set tab) and GridConsole re&#8209;enables it whenever it lapses.</p>
+
+  <h2>Does the app collect my data?</h2>
+  <p>No. See the <a href="privacy.html">Privacy Policy</a>.</p>
+
+  <p class="muted" style="margin-top:32px">GridConsole is an independent companion app and is not made
+  by, affiliated with, or endorsed by Casio. &ldquo;Casio&rdquo;, &ldquo;G&#8209;SHOCK&rdquo; and the
+  watch model names are trademarks of their respective owners.</p>
+</main>
+</html>
