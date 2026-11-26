@@ -57,6 +57,23 @@
   .chip[data-mode="demo"] .dot { background: var(--amber); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
+  /* activity status bar — shows the watch is working during slower BLE writes/reads */
+  .status { position: sticky; top: 8px; z-index: 30; display: none; align-items: center; gap: 10px;
+    font-family: "Share Tech Mono", monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 9px 14px; border-radius: 6px; border: 1px solid var(--edge); color: var(--fg);
+    background: rgba(18,20,23,0.94); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.45); }
+  .status.show { display: flex; }
+  .status .spin { display: none; width: 14px; height: 14px; flex: 0 0 auto; border-radius: 50%;
+    border: 2px solid var(--edge); border-top-color: var(--blue); animation: spin 0.7s linear infinite; }
+  .status[data-kind="busy"] .spin { display: block; }
+  .status .glyph { display: none; font-weight: 700; font-size: 14px; line-height: 1; }
+  .status[data-kind="ok"] .glyph, .status[data-kind="err"] .glyph { display: inline; }
+  .status[data-kind="busy"] { color: var(--blue); border-color: rgba(47,144,216,0.45); }
+  .status[data-kind="ok"]   { color: var(--green); border-color: rgba(100,200,120,0.5); }
+  .status[data-kind="err"]  { color: var(--red); border-color: rgba(224,83,61,0.55); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* watch-button styling */
   button { font-family: "Chakra Petch", sans-serif; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
     font-size: 12px; cursor: pointer; color: var(--fg);
@@ -200,7 +217,7 @@
     .alarm .t { font-size: 20px; }
     .log { max-height: 160px; }
   }
-  @media (prefers-reduced-motion: reduce) { .chip .dot { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .chip .dot, .status .spin { animation: none !important; } }
 </style>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Share+Tech+Mono&display=swap">
@@ -224,6 +241,12 @@
     <button class="tab" role="tab" data-sec="profile" aria-selected="false">Profile</button>
     <button class="tab" role="tab" data-sec="status" aria-selected="false">Status</button>
     <button class="tab" role="tab" data-sec="display" aria-selected="false">Set</button>
+  </div>
+
+  <div class="status" id="statusBar" data-kind="busy" role="status" aria-live="polite">
+    <span class="spin" aria-hidden="true"></span>
+    <span class="glyph" id="statusGlyph" aria-hidden="true"></span>
+    <span id="statusTxt"></span>
   </div>
 
   <!-- SYSTEM / TIME -->
@@ -451,6 +474,35 @@
       '</span>&nbsp; ' + (cls ? '<span class="' + cls + '">' + msg + '</span>' : msg);
     el.insertBefore(line, el.firstChild);
     while (el.children.length > 50) el.removeChild(el.lastChild);
+    if (cls === "e") taskError = true; // an error line during a task flips its status bar to failed
+  }
+
+  // ---- activity status bar ----
+  // Slower BLE writes/reads (timers, world time, activity) can take a second or two; this gives
+  // an impatient user clear "working… / done" feedback so they don't assume nothing happened.
+  var statusHideTimer = null, taskError = false;
+  function showStatus(text, kind) {
+    var b = $("statusBar"); if (!b) return;
+    b.setAttribute("data-kind", kind);
+    $("statusGlyph").textContent = kind === "ok" ? "✓" : (kind === "err" ? "✕" : "");
+    $("statusTxt").textContent = text;
+    b.classList.add("show");
+  }
+  function busy(text) { clearTimeout(statusHideTimer); taskError = false; showStatus(text, "busy"); }
+  function settle(okText, failText) {
+    var ok = !taskError;
+    showStatus(ok ? okText : (failText || "Something failed — see console"), ok ? "ok" : "err");
+    clearTimeout(statusHideTimer);
+    statusHideTimer = setTimeout(function () { var b = $("statusBar"); if (b) b.classList.remove("show"); }, 2600);
+  }
+  // Wrap an async action so the bar shows "working…" while it runs and "done"/"failed" after.
+  function task(busyText, doneText, fn) {
+    return function () {
+      var self = this, args = arguments;
+      busy(busyText);
+      return Promise.resolve().then(function () { return fn.apply(self, args); })
+        .then(function () { settle(doneText); }, function () { settle(doneText, "Failed — see console"); });
+    };
   }
   // Let a native host (iOS bridge) write diagnostics straight into this console.
   try { window.__gridLog = log; } catch (e) {}
@@ -948,36 +1000,36 @@
     if (!document.hidden && state.mode === "live" && state.keepLight) keepLightCheck();
   });
   $("connectBtn").addEventListener("click", connect);
-  $("refreshBtn").addEventListener("click", refresh);
-  $("refreshBtn2").addEventListener("click", refresh);
-  $("syncBtn").addEventListener("click", async function () {
+  $("refreshBtn").addEventListener("click", task("Reading watch…", "Readout refreshed", refresh));
+  $("refreshBtn2").addEventListener("click", task("Reading watch…", "Status refreshed", refresh));
+  $("syncBtn").addEventListener("click", task("Syncing watch time…", "Watch time synced", async function () {
     if (state.mode !== "live") return;
     var d = new Date(), y = d.getFullYear();
     try { await writeAll([0x09, y & 0xff, (y >> 8) & 0xff, d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getDay(), 0x00, 0x01]); log("Watch time synced.", "g"); }
     catch (e) { log("Time sync failed: " + e.message, "e"); }
-  });
+  }));
   $("alarms").addEventListener("click", function (ev) {
     var btn = ev.target.closest("button"), row = ev.target.closest(".alarm"); if (!btn || !row) return;
     var n = parseInt(row.getAttribute("data-n"), 10), a = state.alarms[n - 1];
-    if (btn.hasAttribute("data-set")) writeAlarm(n, rowHour(row), clamp(parseInt(row.querySelector("[data-m]").value, 10) || 0, 0, 59), true);
-    else if (btn.hasAttribute("data-toggle")) writeAlarm(n, a.h, a.m, !a.on);
+    if (btn.hasAttribute("data-set")) task("Saving alarm…", "Alarm saved", function () { return writeAlarm(n, rowHour(row), clamp(parseInt(row.querySelector("[data-m]").value, 10) || 0, 0, 59), true); })();
+    else if (btn.hasAttribute("data-toggle")) task(a.on ? "Turning alarm off…" : "Turning alarm on…", "Alarm saved", function () { return writeAlarm(n, a.h, a.m, !a.on); })();
   });
-  $("sw24").addEventListener("click", function () { writeBasic("h24", !state.basic.h24); });
-  $("swTone").addEventListener("click", function () { writeBasic("tone", !state.basic.tone); });
-  $("swLight").addEventListener("click", function () { writeBasic("light", !state.basic.light); });
-  $("swVib").addEventListener("click", function () { writeBasic("vib", !state.basic.vib); });
-  $("swKeepLight").addEventListener("click", function () { setKeepLight(!state.keepLight); });
+  $("sw24").addEventListener("click", task("Saving setting…", "Setting saved", function () { return writeBasic("h24", !state.basic.h24); }));
+  $("swTone").addEventListener("click", task("Saving setting…", "Setting saved", function () { return writeBasic("tone", !state.basic.tone); }));
+  $("swLight").addEventListener("click", task("Saving setting…", "Setting saved", function () { return writeBasic("light", !state.basic.light); }));
+  $("swVib").addEventListener("click", task("Saving setting…", "Setting saved", function () { return writeBasic("vib", !state.basic.vib); }));
+  $("swKeepLight").addEventListener("click", task("Saving setting…", "Setting saved", function () { return setKeepLight(!state.keepLight); }));
   $("swSleep").addEventListener("click", function () { setSleep(!state.sleep.on); });
   $("sleepFrom").addEventListener("change", function () { state.sleep.from = this.value || "23:00"; if (state.sleep.on) startSleepSched(); });
   $("sleepTo").addEventListener("change", function () { state.sleep.to = this.value || "07:00"; if (state.sleep.on) startSleepSched(); });
-  $("sendTimers").addEventListener("click", sendTimers);
-  $("sendNote").addEventListener("click", function () { sendNotification(false); });
-  $("clearNote").addEventListener("click", function () { sendNotification(true); });
-  $("swWrist").addEventListener("click", function () { writeProfile("wrist", !state.profile.right); });
-  $("swGender").addEventListener("click", function () { writeProfile("gender", !state.profile.female); });
-  $("readAct").addEventListener("click", readActivity);
-  $("findWatch").addEventListener("click", findWatch);
-  $("applyCity").addEventListener("click", applyWorldCity);
+  $("sendTimers").addEventListener("click", task("Sending timers to watch…", "Timers updated", sendTimers));
+  $("sendNote").addEventListener("click", task("Sending to watch…", "Sent to watch", function () { return sendNotification(false); }));
+  $("clearNote").addEventListener("click", task("Clearing notification…", "Notification cleared", function () { return sendNotification(true); }));
+  $("swWrist").addEventListener("click", task("Saving profile…", "Profile saved", function () { return writeProfile("wrist", !state.profile.right); }));
+  $("swGender").addEventListener("click", task("Saving profile…", "Profile saved", function () { return writeProfile("gender", !state.profile.female); }));
+  $("readAct").addEventListener("click", task("Reading activity…", "Activity updated", readActivity));
+  $("findWatch").addEventListener("click", task("Buzzing watch…", "Watch buzzed", findWatch));
+  $("applyCity").addEventListener("click", task("Updating world time…", "World time set", applyWorldCity));
 
   // Screenshot/preview mode: fill realistic sample data so the UI looks fully populated
   // without a watch. Activated only via a launch argument in the iOS Simulator.
