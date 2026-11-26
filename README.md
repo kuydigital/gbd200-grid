@@ -57,7 +57,7 @@ Then:
 
 1. **Turn your phone's Bluetooth off** (so the watch isn't already connected to the G-SHOCK MOVE
    app — BLE allows only one connection). On iPhone use **Settings → Bluetooth**, not Control Center.
-2. On the watch, hold the lower-left button to enter connect/pairing mode.
+2. On the watch, hold the upper-left button ~2 sec, select PAIRING, then CONNECT (press upper-right to confirm each) to enter pairing mode.
 3. Click **Connect** and pick **CASIO GBD-200** in the browser's device chooser.
 4. Edit alarms, settings, timers; sync time; send a notification. Changes are read back to confirm.
 

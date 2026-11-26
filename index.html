@@ -622,7 +622,7 @@
     try {
       // First-run hint (native app only): new users must pair the watch once.
       var paired = false; try { paired = !!localStorage.getItem("gc_paired"); } catch (e) {}
-      if (window.__nativeBridge && !paired) log("First time? Hold the watch's lower-left button to enter CONNECT, then accept the Bluetooth pairing request.", "o");
+      if (window.__nativeBridge && !paired) log("First time? On the watch, hold the upper-left button ~2 sec, select PAIRING then CONNECT (upper-right confirms each), then accept the Bluetooth pairing request.", "o");
       log("Requesting device…");
       bt.synced = false;
       bt.device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "CASIO" }], optionalServices: [SVC] });
