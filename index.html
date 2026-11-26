@@ -796,6 +796,10 @@
     try {
       var repeat = clamp(parseInt($("repeat").value, 10) || 1, 1, 20);
       var rows = $("timers").querySelectorAll(".trow"), cfg = [0x2a, repeat];
+      // Wrap the whole write in the watch's write-session bracket (0x21 00 01 … 0x21 01 01).
+      // Closing the session is what makes the watch reload its on-screen display — without it
+      // the values are stored but the LCD doesn't refresh (same fix as World Time).
+      await writeAll([0x21, 0x00, 0x01]); await delay(80);
       for (var i = 0; i < 5; i++) {
         var r = rows[i], mn = clamp(parseInt(r.querySelector("[data-min]").value, 10) || 0, 0, 60), sc = clamp(parseInt(r.querySelector("[data-sec]").value, 10) || 0, 0, 59);
         var skip = (mn === 0 && sc === 0);
@@ -805,7 +809,9 @@
         while (frame.length < 20) frame.push(0);
         await writeAll(frame); await delay(60);
       }
-      await writeAll(cfg); await delay(150); await refreshTimers(); renderTimers();
+      await writeAll(cfg); await delay(80);
+      await writeAll([0x21, 0x01, 0x01]); await delay(150);   // close session → watch refreshes display
+      await refreshTimers(); renderTimers();
       log("Interval timers written (" + repeat + "x repeat).", "g");
     } catch (e) { log("Timer write failed: " + e.message, "e"); }
   }
