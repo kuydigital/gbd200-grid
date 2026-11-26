@@ -805,7 +805,13 @@
         while (frame.length < 20) frame.push(0);
         await writeAll(frame); await delay(60);
       }
-      await writeAll(cfg); await delay(150); await refreshTimers(); renderTimers();
+      await writeAll(cfg); await delay(150);
+      // Display-refresh nudge: the bare write reaches the watch but the LCD stays stale until reconnect.
+      // Same 0x2f "apply this feature" commit that refreshes world time (there it references 0x1e); here it
+      // references the timer feature 0x2a. In its own try/catch so it can NEVER break the write above, which
+      // has already landed. NOT wrapped in the 0x21 session bracket — the watch rejects timer features inside that.
+      try { await writeAll([0x2f, 0x0e, 0x04, 0x00, 0x2a, 0x00]); await delay(150); } catch (e) { /* write already succeeded; ignore */ }
+      await refreshTimers(); renderTimers();
       log("Interval timers written (" + repeat + "x repeat).", "g");
     } catch (e) { log("Timer write failed: " + e.message, "e"); }
   }
