@@ -418,12 +418,11 @@
         <div class="tile"><div class="k">Module</div><div class="v small" id="sModule">&#8212;</div></div>
         <div class="tile"><div class="k">Firmware</div><div class="v small" id="sFw">&#8212;</div></div>
         <div class="tile"><div class="k">Home City</div><div class="v" id="sCity">&#8212;</div></div>
-        <div class="tile"><div class="k">Watch Condition &#183; 0x28</div><div class="v small" id="sCond">&#8212;</div></div>
+        <div class="tile"><div class="k">Watch Condition</div><div class="v small" id="sCond">&#8212;</div><div class="k" id="sCondRaw" style="margin-top:5px;opacity:.55;letter-spacing:.12em">&#8212;</div></div>
         <div class="tile"><div class="k">Last Readout</div><div class="v small" id="sSync">&#8212;</div></div>
-        <div class="tile"><div class="k">Battery</div><div class="v small" id="sBatt">No gauge</div></div>
       </div>
       <div class="actions"><button id="refreshBtn2" class="primary" disabled>Refresh Status</button></div>
-      <p class="note" style="margin-top:12px"><b>About battery:</b> the GBD&#8209;200 has <b>no battery gauge at all</b> &#8212; not over Bluetooth and not on the watch. Its Bluetooth services expose no standard Battery Service (<code>0x180F</code>), and the Casio frames carry no battery field; the watch only flashes a <b>low&#8209;battery warning</b> when the coin cell is nearly dead. There is no level or percentage to read anywhere. This tab shows the live <b>watch&#8209;condition block</b> and link health instead, which the watch <i>does</i> report.</p>
+      <p class="note" style="margin-top:12px"><b>Watch Condition</b> is a fixed status signature the watch reports &#8212; shown as <b>Normal</b> while it&rsquo;s responding (the raw bytes are listed under it for reference). The GBD&#8209;200 has <b>no battery gauge</b>, over Bluetooth or on the watch; it only flashes a <b>low&#8209;battery warning</b> when the coin cell is nearly dead, so there&rsquo;s no level or percentage to show.</p>
     </div>
   </section>
 
@@ -604,7 +603,8 @@
     $("sModule").textContent = state.name || "—";
     $("sFw").textContent = state.fw || "—";
     $("sCity").textContent = state.city || "—";
-    $("sCond").textContent = state.status || "—";
+    $("sCond").textContent = state.status ? "Normal" : "—";
+    $("sCondRaw").textContent = state.status || "";
     $("sSync").textContent = state.lastSync || "—";
   }
   function renderProfile() {
@@ -618,7 +618,7 @@
     $("unit").textContent = (state.name || "GBD-200").replace(/^CASIO\s+/i, "");
     $("tFw").textContent = state.fw || "—";
     $("tCity").textContent = state.city || "—";
-    $("tStatus").textContent = state.status || "—";
+    $("tStatus").textContent = state.status ? "Normal" : "—";
     $("fmtInd").textContent = state.basic.h24 ? "24H" : "12H";
     tick();
   }
@@ -1094,7 +1094,7 @@
   // Screenshot/preview mode: fill realistic sample data so the UI looks fully populated
   // without a watch. Activated only via a launch argument in the iOS Simulator.
   function enterPreview() {
-    state.name = "CASIO GBD-200"; state.fw = "1.0.3"; state.city = "MANILA"; state.status = "NORMAL";
+    state.name = "CASIO GBD-200"; state.fw = "1.0.3"; state.city = "MANILA"; state.status = "06 20 00 00 b9 00";
     state.lastSync = new Date().toLocaleTimeString();
     state.alarms = [ {h:6,m:30,on:true},{h:7,m:0,on:false},{h:8,m:15,on:true},{h:12,m:0,on:false} ];
     state.basic = { h24:true, tone:true, light:true, vib:false };
