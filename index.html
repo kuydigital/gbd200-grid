@@ -847,7 +847,7 @@
     if (state.mode !== "live") return;
     try {
       var repeat = clamp(parseInt($("repeat").value, 10) || 1, 1, 20);
-      var rows = $("timers").querySelectorAll(".trow"), cfg = [0x2a, repeat];
+      var rows = $("timers").querySelectorAll(".trow"), cfg = [0x2a, repeat], sent = [];
       for (var i = 0; i < 5; i++) {
         var r = rows[i], mn = clamp(parseInt(r.querySelector("[data-min]").value, 10) || 0, 0, 60), sc = clamp(parseInt(r.querySelector("[data-sec]").value, 10) || 0, 0, 59);
         var skip = (mn === 0 && sc === 0);
@@ -856,6 +856,7 @@
         for (var c = 0; c < nm.length; c++) frame.push(nm.charCodeAt(c));
         while (frame.length < 20) frame.push(0);
         await writeAll(frame); await delay(60);
+        sent.push({ name: nm, min: skip ? 0 : mn, sec: skip ? 0 : sc });
       }
       await writeAll(cfg); await delay(150);
       // Display-refresh nudge: the bare write reaches the watch but the LCD stays stale until reconnect.
@@ -863,7 +864,13 @@
       // references the timer feature 0x2a. In its own try/catch so it can NEVER break the write above, which
       // has already landed. NOT wrapped in the 0x21 session bracket — the watch rejects timer features inside that.
       try { await writeAll([0x2f, 0x0e, 0x04, 0x00, 0x2a, 0x00]); await delay(150); } catch (e) { /* write already succeeded; ignore */ }
-      await refreshTimers(); renderTimers();
+      // Reflect exactly what we just sent (and the watch accepted). Do NOT read 0x2a back here: on the
+      // native iOS bridge the watch's timer-config read lags and returns the OLD values, which then revert
+      // the inputs the user just set. The watch LCD is already correct (the 0x2f commit above refreshed it);
+      // a later full "Refresh Readout" still re-reads 0x2a normally.
+      state.repeat = repeat;
+      for (var j = 0; j < 5; j++) { state.timers[j].name = sent[j].name; state.timers[j].min = sent[j].min; state.timers[j].sec = sent[j].sec; }
+      renderTimers();
       log("Interval timers written (" + repeat + "x repeat).", "g");
     } catch (e) { log("Timer write failed: " + e.message, "e"); }
   }
