@@ -182,6 +182,12 @@
   .power { height: 9px; border: 1px solid #05211a; border-radius: 2px; margin-top: 9px; position: relative; overflow: hidden; background: rgba(0,0,0,0.5); }
   .power i { position: absolute; inset: 1px; width: var(--lvl, 66%); background: linear-gradient(90deg, var(--red), var(--amber), var(--green)); }
 
+  .goalwrap { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .goalbar { flex: 1 1 auto; height: 12px; border-radius: 6px; background: var(--lcd-bg); border: 1px solid #05211a; overflow: hidden; }
+  :root[data-theme="light"] .goalbar { border-color: #a7b3a0; }
+  .goalfill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--blue-2), var(--blue)); transition: width 0.45s ease; }
+  .goalpct { font-family: "Share Tech Mono", monospace; font-size: 13px; color: var(--lcd-on); min-width: 48px; text-align: right; }
+  :root[data-theme="light"] .goalpct { color: var(--blue-2); }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
   .actions button { flex: 1 1 150px; }
 
@@ -433,10 +439,23 @@
       <div class="tiles">
         <div class="tile"><div class="k">Date (UTC)</div><div class="v small" id="aDate">&#8212;</div></div>
         <div class="tile"><div class="k">Steps</div><div class="v" id="aSteps">&#8212;</div></div>
+        <div class="tile"><div class="k">Goal</div><div class="v" id="aGoal">&#8212;</div></div>
         <div class="tile"><div class="k">Calories</div><div class="v" id="aCals">&#8212;</div></div>
       </div>
+      <div class="goalwrap">
+        <div class="goalbar"><div class="goalfill" id="aFill"></div></div>
+        <div class="goalpct" id="aPct">&#8212;</div>
+      </div>
       <div class="actions"><button id="readAct" class="primary" disabled>Read Activity</button></div>
-      <p class="note">Reads the step/calorie totals the watch logged for today (convoy channel 0x23/0x24). Read-only.</p>
+      <p class="note">Reads the step/calorie totals the watch logged for today (convoy channel 0x23/0x24).</p>
+
+      <p class="eyebrow" style="margin-top:22px">Daily Step Goal &#183; 0x43</p>
+      <div class="bar" style="margin-top:12px">
+        <label for="stepGoal" class="note" style="margin:0">Target steps</label>
+        <input type="number" id="stepGoal" min="1000" max="50000" step="1000" value="10000" style="width:96px" aria-label="Daily step goal">
+        <button id="setGoal">Set Goal</button>
+      </div>
+      <p class="note">Sets the watch's daily step target (feature 0x43) &#8212; the watch's own step-progress display uses it. Saved on this phone too, so your goal shows even before the watch syncs. 1,000-step steps, 1,000&#8211;50,000.</p>
     </div>
   </section>
 
@@ -464,6 +483,9 @@
     Not affiliated with or endorsed by Casio.
   </p>
 
+  <p class="note" style="text-align:center;margin-top:18px">
+    <a href="faq.html">Help &amp; FAQ</a> &#183; <a href="faq.html#pairing">Trouble pairing?</a> &#183; <a href="privacy.html">Privacy</a>
+  </p>
   <p class="copyright">Copyright &copy; 2026 KUYDIGITAL</p>
 </div>
 
@@ -488,6 +510,7 @@
     cities: ["—", "—"],
     profile: { female:false, right:false },
     activity: { date:"—", steps:"—", cals:"—" },
+    stepTarget: 10000,
     keepLight: false,
     sleep: { on: false, from: "23:00", to: "07:00" }   // release the watch during these hours to save battery
   };
@@ -507,6 +530,7 @@
   var noteId = 1;
 
   var $ = function (id) { return document.getElementById(id); };
+  try { var _gt = parseInt(localStorage.getItem("gc_stepTarget"), 10); if (_gt >= 1000 && _gt <= 50000) state.stepTarget = _gt; } catch (e) {}
   var pad = function (n) { return (n < 10 ? "0" : "") + n; };
   var clamp = function (v, lo, hi) { return Math.max(lo, Math.min(hi, v)); };
   var delay = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -611,7 +635,18 @@
     $("swWrist").setAttribute("aria-pressed", state.profile.right ? "true" : "false");
     $("swGender").setAttribute("aria-pressed", state.profile.female ? "true" : "false");
   }
-  function renderActivity() { $("aDate").textContent = state.activity.date; $("aSteps").textContent = state.activity.steps; $("aCals").textContent = state.activity.cals; }
+  function renderActivity() {
+    $("aDate").textContent = state.activity.date; $("aSteps").textContent = state.activity.steps; $("aCals").textContent = state.activity.cals;
+    var tgt = state.stepTarget || 0;
+    $("aGoal").textContent = tgt ? tgt.toLocaleString() : "—";
+    var hasSteps = /[0-9]/.test(String(state.activity.steps));
+    var stepsNum = parseInt(String(state.activity.steps).replace(/[^0-9]/g, ""), 10); if (!isFinite(stepsNum)) stepsNum = 0;
+    var pct = (hasSteps && tgt > 0) ? Math.min(100, Math.round(stepsNum / tgt * 100)) : 0;
+    $("aFill").style.width = pct + "%";
+    $("aPct").textContent = (hasSteps && tgt > 0) ? pct + "%" : "—";
+    var gi = $("stepGoal"); if (gi && document.activeElement !== gi) gi.value = tgt || 10000;
+  }
+  function parseGoal(a) { if (a && a.length >= 3) state.stepTarget = ((a[1] | (a[2] << 8)) >>> 0) || state.stepTarget; }
   function renderWorld() { $("wCity0").textContent = state.cities[0] || "—"; $("wCity1").textContent = state.cities[1] || "—"; }
   function renderInfo() {
     $("tName").textContent = state.name || "—";
@@ -782,6 +817,7 @@
     if (ct) state.cities[0] = ascii(ct, 2);
     var c1 = await safeRead([0x1f, 1]); if (c1) state.cities[1] = ascii(c1, 2);
     var pf = await safeRead([0x45]); if (pf) parseProfile(pf);
+    var gl = await safeRead([0x43]); if (gl) { parseGoal(gl); try { localStorage.setItem("gc_stepTarget", String(state.stepTarget)); } catch (e) {} }
     await refreshTimers();
     state.lastSync = new Date().toLocaleTimeString();
     renderAll(); log("Readout refreshed.", "g");
@@ -950,6 +986,31 @@
     } catch (e) { log("Profile write failed: " + e.message, "e"); renderProfile(); }
   }
 
+  // ---- daily step goal (feature 0x43, bytes[1:3] LE16) ----
+  // Read-modify-write: set the step-goal word, stamp the companion constant 0x08fc the
+  // official app always writes, preserve the running-goal bytes, then redraw commit so the
+  // watch's step-progress display refreshes. Works offline too (saves on the phone).
+  async function setStepGoal() {
+    var gi = $("stepGoal");
+    var goal = clamp(Math.round((parseInt(gi.value, 10) || 10000) / 1000) * 1000, 1000, 50000);
+    gi.value = goal; state.stepTarget = goal;
+    try { localStorage.setItem("gc_stepTarget", String(goal)); } catch (e) {}
+    renderActivity();
+    if (state.mode !== "live") { log("Step goal saved on this phone: " + goal.toLocaleString() + " &#8212; connect to send it to the watch.", "o"); return; }
+    try {
+      var cur = await request([0x43]); var arr = Array.from(cur);
+      if (arr.length < 6) throw new Error("unexpected 0x43 length " + arr.length);
+      arr[1] = goal & 0xff; arr[2] = (goal >> 8) & 0xff;   // daily step goal, little-endian u16
+      arr[4] = 0xfc; arr[5] = 0x08;                        // companion constant the official app stamps on every goal write
+      await writeAll(arr); await delay(150);
+      // redraw commit (our convention: 2f 0e 04 00 <feat> 00). Non-fatal — the value has already landed.
+      try { await writeAll([0x2f, 0x0e, 0x04, 0x00, 0x43, 0x00]); await delay(150); } catch (e) {}
+      parseGoal(await request([0x43]));
+      try { localStorage.setItem("gc_stepTarget", String(state.stepTarget)); } catch (e) {}
+      renderActivity(); log("Daily step goal &#8594; " + state.stepTarget.toLocaleString() + " on the watch.", "g");
+    } catch (e) { log("Step goal write failed: " + e.message, "e"); }
+  }
+
   // ---- activity (convoy 0x23/0x24) ----
   async function readActivity() {
     if (state.mode !== "live" || !bt.c23) { log("Activity channel unavailable on this watch.", "e"); return; }
@@ -1088,6 +1149,8 @@
   $("swWrist").addEventListener("click", task("Saving profile…", "Profile saved", function () { return writeProfile("wrist", !state.profile.right); }));
   $("swGender").addEventListener("click", task("Saving profile…", "Profile saved", function () { return writeProfile("gender", !state.profile.female); }));
   $("readAct").addEventListener("click", task("Reading activity…", "Activity updated", readActivity));
+  $("setGoal").addEventListener("click", task("Setting step goal…", "Step goal set", setStepGoal));
+  $("stepGoal").addEventListener("keydown", function (e) { if (e.key === "Enter") $("setGoal").click(); });
   $("findWatch").addEventListener("click", task("Buzzing watch…", "Watch buzzed", findWatch));
   $("applyCity").addEventListener("click", task("Updating world time…", "World time set", applyWorldCity));
 
@@ -1102,6 +1165,7 @@
     state.cities = ["MANILA","TOKYO"];
     state.profile = { female:false, right:false };
     state.activity = { date:new Date().toLocaleDateString(), steps:"8,420", cals:"312" };
+    state.stepTarget = 10000;
     state.keepLight = true;
     state.sleep = { on: true, from: "23:00", to: "07:00" };
     setMode("live"); renderAll();
